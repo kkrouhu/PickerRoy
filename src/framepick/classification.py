@@ -17,8 +17,9 @@ CATEGORY_KEYWORDS = {
     "Action": {"sport", "running", "cycling", "ski", "skate", "jump", "dance", "swim", "climb", "exercise", "athlete", "motion"},
     "Landscape": {"landscape", "mountain", "sky", "sea", "ocean", "beach", "forest", "nature", "field", "lake", "river", "sunset", "cityscape", "outdoor"},
     "Animal": {"animal", "dog", "cat", "bird", "horse", "wildlife", "pet", "fish", "mammal", "insect"},
+    "Plant": {"plant", "flower", "tree", "leaf", "leaves", "foliage", "garden", "botanical", "flora", "vegetation", "blossom"},
     "Product": {"product", "equipment", "device", "camera", "phone", "vehicle", "car", "bicycle", "food", "tool", "furniture", "shoe", "bottle"},
-    "Detail": {"close-up", "closeup", "macro", "texture", "detail", "pattern", "flower", "food"},
+    "Detail": {"close-up", "closeup", "macro", "texture", "detail", "pattern", "food"},
 }
 
 
@@ -71,6 +72,8 @@ class HeuristicClassifier:
         blue = float(np.mean((hsv[:, :, 0] > 90) & (hsv[:, :, 0] < 135) & (hsv[:, :, 1] > 35)))
         if green + blue > 0.28:
             labels.append({"label": "landscape nature outdoor", "confidence": min(0.70, 0.38 + green + blue)})
+        if green > 0.24:
+            labels.append({"label": "plant foliage botanical", "confidence": min(0.68, 0.36 + green)})
         return labels, len(faces)
 
 

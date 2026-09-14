@@ -45,6 +45,7 @@ CATEGORY_ZH = {
     "Action": "动作",
     "Landscape": "风景",
     "Animal": "动物",
+    "Plant": "植物",
     "Product": "产品/装备",
     "Detail": "细节/特写",
     "Other": "其他",
@@ -217,7 +218,9 @@ class CandidateCard(QFrame):
             pills.addWidget(label)
         pills.addStretch()
         layout.addLayout(pills)
-        meta = QLabel(f"推荐 #{candidate.rank or '–'}  ·  {candidate.timestamp:.2f} 秒  ·  评分 {candidate.final_score:.2f}")
+        popularity = candidate.scores.get("social_popularity")
+        hot_text = f"  ·  热门视觉 {popularity:.0%}" if popularity is not None else ""
+        meta = QLabel(f"推荐 #{candidate.rank or '–'}  ·  {candidate.timestamp:.2f} 秒  ·  评分 {candidate.final_score:.2f}{hot_text}")
         meta.setObjectName("meta")
         layout.addWidget(meta)
         controls = QHBoxLayout()
@@ -400,7 +403,7 @@ class MainWindow(QMainWindow):
         self.category_filter = QComboBox()
         for text, value in [
             ("全部", "All"), ("人物", "Person"), ("动作", "Action"), ("风景", "Landscape"),
-            ("动物", "Animal"), ("产品/装备", "Product"), ("细节/特写", "Detail"),
+            ("动物", "Animal"), ("植物", "Plant"), ("产品/装备", "Product"), ("细节/特写", "Detail"),
         ]:
             self.category_filter.addItem(text, value)
         self.category_filter.currentTextChanged.connect(self.refresh_results)
@@ -425,7 +428,7 @@ class MainWindow(QMainWindow):
         return page
 
     def _preference_page(self) -> QWidget:
-        page, layout = self._page_shell("哪一帧更好？", "每组画面来自同一个镜头和相近时间。你的每次选择都只保存在本机。")
+        page, layout = self._page_shell("哪一帧更好？", "每组画面来自同一个镜头和相近时间。你的选择只保存在本机，并从下一次分析开始参与排序。")
         self.preference_status = QLabel("分析视频后，这里会生成偏好对比。")
         self.preference_status.setObjectName("subtitle")
         layout.addWidget(self.preference_status)
@@ -544,6 +547,7 @@ class MainWindow(QMainWindow):
         stage_names = {
             "scene_detection": "正在识别镜头",
             "sampling": "正在分析候选画面",
+            "popularity": "正在评估热门视觉",
             "ranking": "正在去重并排序",
             "done": "分析完成",
         }
@@ -662,7 +666,9 @@ class MainWindow(QMainWindow):
             pixmap = QPixmap(candidate.preview_path)
             label.setPixmap(pixmap.scaled(520, 500, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         a, b = self.current_pair
-        self.preference_status.setText(f"同一镜头 · {a.timestamp:.2f} 秒 对比 {b.timestamp:.2f} 秒")
+        learned = self.store.counts()["preferences"]
+        learned_text = f"  ·  已学习 {learned} 次选择" if learned else ""
+        self.preference_status.setText(f"同一镜头 · {a.timestamp:.2f} 秒 对比 {b.timestamp:.2f} 秒{learned_text}")
 
     def choose_preference(self, side: str) -> None:
         if not self.current_pair:

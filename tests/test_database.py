@@ -22,5 +22,9 @@ def test_feedback_and_pairwise_preferences_are_persisted(tmp_path):
     store.record_feedback(candidate, "FAVORITE")
     store.record_preference(candidate, second, candidate)
     assert store.latest_feedback()["c"] == "FAVORITE"
+    pairs = store.preference_pairs()
+    assert [(winner.id, loser.id) for winner, loser in pairs] == [("c", "c2")]
+    # Re-analysis updates candidate rows in place so existing pairwise choices remain valid.
+    store.save_analysis(result)
+    assert [(winner.id, loser.id) for winner, loser in store.preference_pairs()] == [("c", "c2")]
     assert store.counts() == {"videos": 1, "candidates": 2, "feedback": 1, "preferences": 1}
-

@@ -1,4 +1,4 @@
-from framepick.classification import ResilientClassifier
+from framepick.classification import ResilientClassifier, categories_from_observations
 
 
 class Broken:
@@ -26,3 +26,11 @@ def test_classifier_falls_back_once_and_stays_healthy():
     assert classifier.classify("unused") == ([{"label": "person", "confidence": 0.8}], 1)
     assert broken.calls == 1
     assert classifier.active_name == "working"
+
+
+def test_plant_observation_has_its_own_category():
+    labels, confidence = categories_from_observations(
+        [{"label": "flower botanical garden", "confidence": 0.88}], 0, 0.1, 0.08, 0.75
+    )
+    assert "Plant" in labels
+    assert confidence["Plant"] == 0.88

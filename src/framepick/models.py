@@ -10,6 +10,7 @@ CATEGORIES = (
     "Action",
     "Landscape",
     "Animal",
+    "Plant",
     "Product",
     "Detail",
     "Other",

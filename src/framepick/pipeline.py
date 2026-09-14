@@ -11,6 +11,8 @@ from .config import ASPECT_RATIOS, AnalysisConfig, VIDEO_EXTENSIONS
 from .database import FeedbackStore
 from .media import candidate_timestamps, estimate_motion, extract_preview, probe_video, read_image, write_image
 from .models import AnalysisResult, Candidate
+from .popularity import IntrinsicPopularityScorer, apply_popularity_scores
+from .preference import apply_preference_scores, train_preference_model
 from .quality import composition_metrics, perceptual_hash, smart_crop_to_aspect, technical_metrics, temporal_motion_series
 from .ranking import apply_temporal_peaks, diversity_rank, mark_duplicates, score_candidates
 from .scene import detect_shots
@@ -34,12 +36,13 @@ def discover_videos(inputs: Iterable[str | Path]) -> list[Path]:
 
 class VideoAnalyzer:
     def __init__(self, data_dir: str | Path, config: AnalysisConfig | None = None,
-                 store: FeedbackStore | None = None, classifier=None):
+                 store: FeedbackStore | None = None, classifier=None, popularity_scorer=None):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config = config or AnalysisConfig()
         self.store = store
         self.classifier = classifier or build_classifier()
+        self.popularity_scorer = popularity_scorer or IntrinsicPopularityScorer()
 
     def analyze(self, video_path: str | Path, progress: ProgressCallback | None = None) -> AnalysisResult:
         started = time.monotonic()
@@ -125,9 +128,14 @@ class VideoAnalyzer:
             except Exception as exc:
                 LOGGER.warning("Could not refine temporal motion for shot %s: %s", shot.id, exc)
 
-        self._emit(progress, stage="ranking", video=Path(video.path).name, shots=total_shots,
-                   candidates=len(all_candidates), progress=0.88)
+        self._emit(progress, stage="popularity", video=Path(video.path).name, shots=total_shots,
+                   candidates=len(all_candidates), progress=0.84)
+        apply_popularity_scores(all_candidates, self.popularity_scorer)
         apply_temporal_peaks(all_candidates)
+        if self.store:
+            apply_preference_scores(all_candidates, train_preference_model(self.store.preference_pairs()))
+        self._emit(progress, stage="ranking", video=Path(video.path).name, shots=total_shots,
+                   candidates=len(all_candidates), progress=0.90)
         score_candidates(all_candidates, self.config.mode)
         mark_duplicates(all_candidates, self.config.duplicate_hamming_distance)
         ranked = diversity_rank(all_candidates, self.config.max_results_per_video)

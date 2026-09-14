@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from statistics import mean
 
-from .models import AnalysisResult
+from .models import CATEGORIES, AnalysisResult
 from .pipeline import load_analysis
 from .quality import hamming_distance
 
@@ -41,7 +41,7 @@ def evaluate_result(result: AnalysisResult, targets: list[dict]) -> dict[str, fl
     metrics["duplicate_rate"] = visible_duplicate_pairs / max(len(visible), 1)
     metrics["source_candidate_duplicate_fraction"] = all_duplicate_count / max(len(all_valid), 1)
     metrics["rejected_technical_failure_rate"] = len(rejected) / max(len(result.candidates), 1)
-    metrics["category_coverage"] = len(categories) / 6
+    metrics["category_coverage"] = len(categories) / max(len(CATEGORIES) - 1, 1)
     metrics["candidates_presented"] = float(len(visible))
     return metrics
 

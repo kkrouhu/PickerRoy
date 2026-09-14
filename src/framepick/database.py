@@ -71,13 +71,26 @@ class FeedbackStore:
     def save_analysis(self, result: AnalysisResult) -> None:
         with self._lock, self._connect() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO videos(id,path,metadata_json) VALUES(?,?,?)",
+                """INSERT INTO videos(id,path,metadata_json) VALUES(?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                    path=excluded.path,
+                    metadata_json=excluded.metadata_json,
+                    analyzed_at=CURRENT_TIMESTAMP""",
                 (result.video.id, result.video.path, json.dumps(result.video.to_dict(), ensure_ascii=False)),
             )
             conn.executemany(
-                """INSERT OR REPLACE INTO candidates
+                """INSERT INTO candidates
                 (id,video_id,shot_id,timestamp,preview_path,categories_json,scores_json,embedding_ref,payload_json)
-                VALUES(?,?,?,?,?,?,?,?,?)""",
+                VALUES(?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                    video_id=excluded.video_id,
+                    shot_id=excluded.shot_id,
+                    timestamp=excluded.timestamp,
+                    preview_path=excluded.preview_path,
+                    categories_json=excluded.categories_json,
+                    scores_json=excluded.scores_json,
+                    embedding_ref=excluded.embedding_ref,
+                    payload_json=excluded.payload_json""",
                 [
                     (
                         item.id, item.video_id, item.shot_id, item.timestamp, item.preview_path,
@@ -122,6 +135,23 @@ class FeedbackStore:
                 (video_id,shot_id,candidate_a_id,candidate_b_id,winner_id) VALUES(?,?,?,?,?)""",
                 (a.video_id, a.shot_id, a.id, b.id, winner.id),
             )
+
+    def preference_pairs(self) -> list[tuple[Candidate, Candidate]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT winner.payload_json, loser.payload_json
+                FROM preferences preference
+                JOIN candidates winner ON winner.id = preference.winner_id
+                JOIN candidates loser ON loser.id = CASE
+                    WHEN preference.winner_id = preference.candidate_a_id THEN preference.candidate_b_id
+                    ELSE preference.candidate_a_id
+                END
+                ORDER BY preference.id"""
+            ).fetchall()
+        return [
+            (Candidate.from_dict(json.loads(winner)), Candidate.from_dict(json.loads(loser)))
+            for winner, loser in rows
+        ]
 
     def counts(self) -> dict[str, int]:
         with self._connect() as conn:

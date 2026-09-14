@@ -54,3 +54,11 @@ def test_diversity_ranking_includes_multiple_categories():
     ranked = diversity_rank(items, limit=3)
     assert {label for item in ranked for label in item.labels} >= {"Person", "Landscape"}
 
+
+def test_social_popularity_breaks_a_tie_between_technically_equal_frames():
+    low = candidate("low-social", 1, ["Landscape"], 0.8, "0000000000000000")
+    high = candidate("high-social", 2, ["Landscape"], 0.8, "ffffffffffffffff")
+    low.scores["social_popularity"] = 0.0
+    high.scores["social_popularity"] = 1.0
+    score_candidates([low, high], "Balanced")
+    assert high.final_score > low.final_score

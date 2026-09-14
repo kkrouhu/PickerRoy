@@ -5,6 +5,7 @@ from collections import defaultdict
 import numpy as np
 
 from .models import CATEGORIES, Candidate
+from .preference import preference_blend_weight
 from .quality import hamming_distance
 
 
@@ -12,8 +13,19 @@ MODE_CATEGORY_BOOST = {
     "Balanced": {},
     "Portrait": {"Person": 0.16},
     "Action": {"Action": 0.18},
-    "Landscape": {"Landscape": 0.18},
+    "Landscape": {"Landscape": 0.18, "Plant": 0.10},
     "Product": {"Product": 0.18, "Detail": 0.06},
+}
+
+SOCIAL_POPULARITY_WEIGHT = {
+    "Person": 0.22,
+    "Action": 0.16,
+    "Landscape": 0.20,
+    "Animal": 0.18,
+    "Plant": 0.19,
+    "Product": 0.18,
+    "Detail": 0.20,
+    "Other": 0.18,
 }
 
 
@@ -27,17 +39,25 @@ def category_scores(candidate: Candidate, mode: str = "Balanced") -> dict[str, f
     temporal = s.get("temporal_peak", 0.5)
     face = s.get("face_quality", 0.0)
     category_confidence = candidate.label_confidence
+    social_popularity = s.get("social_popularity", 0.5)
     values = {
         "Person": 0.28 * technical + 0.23 * face + 0.17 * sharpness + 0.13 * exposure + 0.12 * composition + 0.07 * temporal,
         "Action": 0.23 * technical + 0.17 * sharpness + 0.21 * temporal + 0.18 * motion + 0.13 * composition + 0.08 * exposure,
         "Landscape": 0.29 * technical + 0.19 * sharpness + 0.21 * composition + 0.19 * exposure + 0.12 * s.get("contrast", 0),
         "Animal": 0.27 * technical + 0.20 * sharpness + 0.18 * temporal + 0.15 * composition + 0.12 * exposure + 0.08 * motion,
+        "Plant": 0.27 * technical + 0.22 * sharpness + 0.19 * composition + 0.15 * exposure + 0.11 * s.get("contrast", 0) + 0.06 * s.get("edge_density", 0),
         "Product": 0.31 * technical + 0.25 * sharpness + 0.20 * composition + 0.16 * exposure + 0.08 * s.get("contrast", 0),
         "Detail": 0.31 * technical + 0.30 * sharpness + 0.18 * composition + 0.13 * exposure + 0.08 * s.get("edge_density", 0),
         "Other": 0.48 * technical + 0.22 * composition + 0.18 * exposure + 0.12 * temporal,
     }
     boost = MODE_CATEGORY_BOOST.get(mode, {})
     for category in values:
+        social_weight = SOCIAL_POPULARITY_WEIGHT[category]
+        values[category] = (1.0 - social_weight) * values[category] + social_weight * social_popularity
+        personal_weight = preference_blend_weight(s.get("personal_preference_samples", 0.0))
+        if personal_weight:
+            personal = s.get("personal_preference", 0.5)
+            values[category] = (1.0 - personal_weight) * values[category] + personal_weight * personal
         semantic = category_confidence.get(category, 0.0)
         values[category] = float(np.clip(values[category] * (0.88 + 0.12 * semantic) + boost.get(category, 0), 0, 1))
     return values
@@ -133,4 +153,3 @@ def diversity_rank(candidates: list[Candidate], limit: int = 60) -> list[Candida
     for rank, item in enumerate(selected, 1):
         item.rank = rank
     return selected
-
