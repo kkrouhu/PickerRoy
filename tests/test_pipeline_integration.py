@@ -35,7 +35,6 @@ def test_scene_to_ranked_candidates(tmp_path):
     assert len(result.shots) >= 2
     assert any(item.rank is not None for item in result.candidates)
     assert all(item.preview_path for item in result.candidates)
-    manifest = tmp_path / "data" / "cache" / result.video.id / "analysis.json"
+    manifest = tmp_path / "data" / "cache" / result.video.id / "original" / "analysis.json"
     assert json.loads(manifest.read_text())["schema_version"] == 1
     assert discover_videos([tmp_path]) == [video]
-

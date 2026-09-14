@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
+import pytest
 
-from framepick.quality import hamming_distance, perceptual_hash, technical_metrics, temporal_motion_series
+from framepick.quality import hamming_distance, perceptual_hash, smart_crop_to_aspect, technical_metrics, temporal_motion_series
 
 
 def test_black_frame_is_rejected():
@@ -36,3 +37,14 @@ def test_temporal_motion_distinguishes_static_and_changed_frames():
     changed_values = temporal_motion_series([still, changed, changed])
     assert max(static_values) == 0
     assert max(changed_values) > 0.5
+
+
+def test_smart_crop_produces_requested_ratios():
+    image = np.zeros((600, 1000, 3), dtype=np.uint8)
+    cv2.circle(image, (720, 260), 80, (255, 255, 255), -1)
+    square, square_box = smart_crop_to_aspect(image, 1.0)
+    portrait, portrait_box = smart_crop_to_aspect(image, 2 / 3)
+    assert square.shape[:2] == (600, 600)
+    assert portrait.shape[1] / portrait.shape[0] == pytest.approx(2 / 3, abs=0.01)
+    assert square_box[2] < 1.0
+    assert portrait_box[2] < square_box[2]

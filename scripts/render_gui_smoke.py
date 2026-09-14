@@ -18,6 +18,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("analysis")
     parser.add_argument("output")
+    parser.add_argument("--import-video", help="渲染已导入视频的中文导入页面")
     args = parser.parse_args()
     output = Path(args.output).resolve()
     data_dir = output.parent / "gui-data"
@@ -26,9 +27,13 @@ def main() -> int:
     app.setStyle("Fusion")
     app.setStyleSheet(APP_STYLE)
     window = MainWindow(data_dir, configure_logging(data_dir))
-    window.results = [load_analysis(args.analysis)]
-    window.pages.setCurrentIndex(1)
-    window.refresh_results()
+    if args.import_video:
+        window.add_inputs([args.import_video])
+        window.pages.setCurrentIndex(0)
+    else:
+        window.results = [load_analysis(args.analysis)]
+        window.pages.setCurrentIndex(1)
+        window.refresh_results()
     window.show()
 
     def capture() -> None:

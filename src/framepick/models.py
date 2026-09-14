@@ -70,6 +70,8 @@ class Candidate:
     hash64: str = ""
     rank: int | None = None
     duplicate_of: str | None = None
+    aspect_ratio: str = "original"
+    crop_box: list[float] = field(default_factory=lambda: [0.0, 0.0, 1.0, 1.0])
 
     @property
     def final_score(self) -> float:
@@ -112,4 +114,3 @@ class AnalysisResult:
 
 def ensure_path(value: str | Path) -> Path:
     return value if isinstance(value, Path) else Path(value)
-

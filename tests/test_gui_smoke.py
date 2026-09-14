@@ -12,5 +12,6 @@ def test_main_window_can_be_created(tmp_path):
     window = MainWindow(tmp_path / "data", tmp_path / "framepick.log")
     assert window.windowTitle() == "PickerRoy"
     assert window.pages.count() == 4
+    assert window.aspect_combo.count() == 8
     window.close()
     app.processEvents()

@@ -6,6 +6,38 @@ import cv2
 import numpy as np
 
 
+def smart_crop_to_aspect(image: np.ndarray, target_ratio: float | None) -> tuple[np.ndarray, list[float]]:
+    """Crop around a conservative edge-saliency center and return a normalized source crop box."""
+    if target_ratio is None or image is None or image.size == 0:
+        return image, [0.0, 0.0, 1.0, 1.0]
+    height, width = image.shape[:2]
+    source_ratio = width / max(height, 1)
+    if abs(source_ratio - target_ratio) < 0.01:
+        return image, [0.0, 0.0, 1.0, 1.0]
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 70, 160).astype(np.float32)
+    edges = cv2.GaussianBlur(edges, (0, 0), sigmaX=max(3.0, min(width, height) / 35)) + 1.0
+    yy, xx = np.mgrid[0:height, 0:width]
+    total = float(edges.sum())
+    saliency_x = float((xx * edges).sum() / total) if total else width / 2
+    saliency_y = float((yy * edges).sum() / total) if total else height / 2
+    # A strong center prior prevents isolated highlights near an edge from producing an unsafe crop.
+    center_x = 0.62 * saliency_x + 0.38 * width / 2
+    center_y = 0.62 * saliency_y + 0.38 * height / 2
+
+    if source_ratio > target_ratio:
+        crop_height = height
+        crop_width = max(1, min(width, round(height * target_ratio)))
+    else:
+        crop_width = width
+        crop_height = max(1, min(height, round(width / target_ratio)))
+    left = int(np.clip(round(center_x - crop_width / 2), 0, width - crop_width))
+    top = int(np.clip(round(center_y - crop_height / 2), 0, height - crop_height))
+    cropped = image[top:top + crop_height, left:left + crop_width].copy()
+    return cropped, [left / width, top / height, crop_width / width, crop_height / height]
+
+
 def _sigmoid(value: float, center: float, scale: float) -> float:
     return 1.0 / (1.0 + math.exp(-(value - center) / max(scale, 1e-6)))
 

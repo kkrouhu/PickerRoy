@@ -22,7 +22,6 @@ def export_candidates(video: VideoInfo, candidates: list[Candidate], destination
     for item in candidates:
         millis = round(item.timestamp * 1000)
         path = destination / f"{stem}_{millis:010d}ms_{item.id[-5:]}{extension}"
-        export_frame(video.path, item.timestamp, path, image_format)
+        export_frame(video.path, item.timestamp, path, image_format, item.crop_box)
         exported.append(path)
     return exported
-

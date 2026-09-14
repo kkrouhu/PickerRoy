@@ -15,12 +15,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("inputs", nargs="+", help="视频文件或文件夹")
     parser.add_argument("--data-dir", default=".pickerroy-data", help="缓存、数据库和日志目录")
     parser.add_argument("--mode", default="Balanced", choices=["Balanced", "Portrait", "Action", "Landscape", "Product"])
+    parser.add_argument(
+        "--aspect-ratio", default="original",
+        choices=["original", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"],
+        help="生成画面比例",
+    )
     parser.add_argument("--json", action="store_true", help="输出 JSON 格式结果")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).resolve()
     configure_logging(data_dir)
     store = FeedbackStore(data_dir / "framepick.sqlite3")
-    analyzer = VideoAnalyzer(data_dir, AnalysisConfig.for_mode(args.mode), store)
+    analyzer = VideoAnalyzer(data_dir, AnalysisConfig.for_mode(args.mode, args.aspect_ratio), store)
     videos = discover_videos(args.inputs)
     if not videos:
         parser.error("没有找到支持的视频文件")

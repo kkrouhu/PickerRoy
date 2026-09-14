@@ -106,13 +106,21 @@ def extract_preview(source: str | Path, timestamp: float, destination: str | Pat
     return destination
 
 
-def export_frame(source: str | Path, timestamp: float, destination: str | Path, image_format: str = "PNG") -> Path:
+def export_frame(source: str | Path, timestamp: float, destination: str | Path, image_format: str = "PNG",
+                 crop_box: list[float] | None = None) -> Path:
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     codec_args = ["-compression_level", "3"] if image_format.upper() == "PNG" else ["-q:v", "1"]
+    filters: list[str] = []
+    if crop_box and len(crop_box) == 4 and crop_box != [0.0, 0.0, 1.0, 1.0]:
+        left, top, width, height = crop_box
+        filters = [
+            "-vf",
+            f"crop=trunc(iw*{width:.8f}/2)*2:trunc(ih*{height:.8f}/2)*2:trunc(iw*{left:.8f}/2)*2:trunc(ih*{top:.8f}/2)*2",
+        ]
     _run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0, timestamp):.6f}",
-        "-i", str(source), "-map", "0:v:0", "-frames:v", "1", *codec_args, "-y", str(destination),
+        "-i", str(source), "-map", "0:v:0", "-frames:v", "1", *filters, *codec_args, "-y", str(destination),
     ])
     return destination
 
@@ -122,6 +130,13 @@ def read_image(path: str | Path) -> np.ndarray:
     if image is None or image.size == 0:
         raise MediaError(f"无法解码抽取的画面：{path}")
     return image
+
+
+def write_image(path: str | Path, image: np.ndarray) -> Path:
+    destination = Path(path)
+    if not cv2.imwrite(str(destination), image, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+        raise MediaError(f"无法保存预览图：{destination}")
+    return destination
 
 
 def estimate_motion(source: str | Path, start: float, end: float, preview_dir: Path) -> float:

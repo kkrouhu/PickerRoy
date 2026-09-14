@@ -7,11 +7,11 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from .classification import build_classifier, categories_from_observations, face_region_sharpness
-from .config import AnalysisConfig, VIDEO_EXTENSIONS
+from .config import ASPECT_RATIOS, AnalysisConfig, VIDEO_EXTENSIONS
 from .database import FeedbackStore
-from .media import candidate_timestamps, estimate_motion, extract_preview, probe_video, read_image
+from .media import candidate_timestamps, estimate_motion, extract_preview, probe_video, read_image, write_image
 from .models import AnalysisResult, Candidate
-from .quality import composition_metrics, perceptual_hash, technical_metrics, temporal_motion_series
+from .quality import composition_metrics, perceptual_hash, smart_crop_to_aspect, technical_metrics, temporal_motion_series
 from .ranking import apply_temporal_peaks, diversity_rank, mark_duplicates, score_candidates
 from .scene import detect_shots
 
@@ -44,7 +44,8 @@ class VideoAnalyzer:
     def analyze(self, video_path: str | Path, progress: ProgressCallback | None = None) -> AnalysisResult:
         started = time.monotonic()
         video = probe_video(video_path)
-        cache_dir = self.data_dir / "cache" / video.id
+        ratio_key = self.config.aspect_ratio.replace(":", "x")
+        cache_dir = self.data_dir / "cache" / video.id / ratio_key
         previews = cache_dir / "previews"
         previews.mkdir(parents=True, exist_ok=True)
         self._emit(progress, stage="scene_detection", video=Path(video.path).name, progress=0.02)
@@ -64,7 +65,7 @@ class VideoAnalyzer:
                 self.config.base_sample_interval, self.config.dynamic_sample_interval,
             )
             for local_index, timestamp in enumerate(times):
-                candidate_id = f"{shot.id}-f{local_index:04d}"
+                candidate_id = f"{shot.id}-{ratio_key}-f{local_index:04d}"
                 preview_path = previews / f"{candidate_id}.jpg"
                 candidate = Candidate(
                     id=candidate_id,
@@ -73,10 +74,15 @@ class VideoAnalyzer:
                     shot_index=shot.index,
                     timestamp=timestamp,
                     preview_path=str(preview_path),
+                    aspect_ratio=self.config.aspect_ratio,
                 )
                 try:
                     extract_preview(video.path, timestamp, preview_path, self.config.preview_width)
                     image = read_image(preview_path)
+                    image, crop_box = smart_crop_to_aspect(image, ASPECT_RATIOS.get(self.config.aspect_ratio))
+                    candidate.crop_box = crop_box
+                    if crop_box != [0.0, 0.0, 1.0, 1.0]:
+                        write_image(preview_path, image)
                     scores, reasons = technical_metrics(image, shot.motion)
                     scores.update(composition_metrics(image))
                     try:

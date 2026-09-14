@@ -61,6 +61,7 @@ QMainWindow { background: #F4F4F1; }
 #title { font-size: 28px; font-weight: 720; color: #171916; }
 #subtitle { color: #696D66; font-size: 14px; }
 #panel { background: white; border: 1px solid #E3E4DF; border-radius: 14px; }
+#panel QLabel { background: transparent; }
 #dropArea { background: #FBFBF9; border: 2px dashed #B9BDB4; border-radius: 14px; }
 #dropArea[active="true"] { border-color: #5B7E62; background: #EFF6EF; }
 QPushButton { background: #E8E9E4; border: none; border-radius: 8px; padding: 9px 14px; font-weight: 600; }
@@ -86,6 +87,7 @@ class DropArea(QFrame):
 
     def __init__(self) -> None:
         super().__init__()
+        self.video_count = 0
         self.setObjectName("dropArea")
         self.setProperty("active", False)
         self.setAcceptDrops(True)
@@ -95,14 +97,27 @@ class DropArea(QFrame):
         icon = QLabel("＋")
         icon.setStyleSheet("font-size: 34px; color: #55725C; background: transparent;")
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title = QLabel("把视频或文件夹拖到这里")
-        title.setStyleSheet("font-size: 18px; font-weight: 650; background: transparent;")
-        note = QLabel("支持单个视频、多个视频和包含视频的文件夹")
-        note.setObjectName("subtitle")
-        note.setStyleSheet("background: transparent;")
+        self.title_label = QLabel("把视频或文件夹拖到这里")
+        self.title_label.setStyleSheet("font-size: 18px; font-weight: 650; background: transparent;")
+        self.note_label = QLabel("支持单个视频、多个视频和包含视频的文件夹")
+        self.note_label.setObjectName("subtitle")
+        self.note_label.setStyleSheet("background: transparent;")
         layout.addWidget(icon)
-        layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(note, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.title_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.note_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def set_summary(self, count: int) -> None:
+        self.video_count = count
+        if count:
+            self.title_label.setText(f"✓ 已成功导入 {count} 条视频")
+            self.note_label.setText("可以继续添加视频，或选择画面比例后开始分析")
+            self.setProperty("active", True)
+        else:
+            self.title_label.setText("把视频或文件夹拖到这里")
+            self.note_label.setText("支持单个视频、多个视频和包含视频的文件夹")
+            self.setProperty("active", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -112,7 +127,7 @@ class DropArea(QFrame):
             self.style().polish(self)
 
     def dragLeaveEvent(self, event) -> None:
-        self.setProperty("active", False)
+        self.setProperty("active", bool(self.video_count))
         self.style().unpolish(self)
         self.style().polish(self)
         super().dragLeaveEvent(event)
@@ -319,10 +334,40 @@ class MainWindow(QMainWindow):
         buttons.addWidget(add_folder)
         buttons.addStretch()
         layout.addLayout(buttons)
+        self.import_status = QLabel("尚未导入视频")
+        self.import_status.setStyleSheet(
+            "background: #E8E9E4; color: #5F635C; border-radius: 8px; padding: 10px 13px; font-weight: 600;"
+        )
+        layout.addWidget(self.import_status)
         self.input_list = QListWidget()
         self.input_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.input_list.setMinimumHeight(110)
         layout.addWidget(self.input_list)
+        ratio_panel = QFrame()
+        ratio_panel.setObjectName("panel")
+        ratio_layout = QHBoxLayout(ratio_panel)
+        ratio_text = QVBoxLayout()
+        ratio_title = QLabel("生成画面比例")
+        ratio_title.setStyleSheet("font-weight: 650;")
+        ratio_note = QLabel("分析、预览和导出都会按所选比例智能裁切，原视频不会改变。")
+        ratio_note.setObjectName("subtitle")
+        ratio_text.addWidget(ratio_title)
+        ratio_text.addWidget(ratio_note)
+        self.aspect_combo = QComboBox()
+        for text, value in [
+            ("原视频比例", "original"),
+            ("1:1 方形", "1:1"),
+            ("3:2 横版", "3:2"),
+            ("2:3 竖版", "2:3"),
+            ("4:3 横版", "4:3"),
+            ("3:4 竖版", "3:4"),
+            ("16:9 横版", "16:9"),
+            ("9:16 竖版", "9:16"),
+        ]:
+            self.aspect_combo.addItem(text, value)
+        ratio_layout.addLayout(ratio_text, 1)
+        ratio_layout.addWidget(self.aspect_combo)
+        layout.addWidget(ratio_panel)
         actions = QHBoxLayout()
         remove = QPushButton("移除选中项目")
         remove.clicked.connect(self.remove_selected_inputs)
@@ -440,13 +485,30 @@ class MainWindow(QMainWindow):
     def add_inputs(self, raw_paths: list[str]) -> None:
         videos = discover_videos(raw_paths)
         existing = set(self.pending_paths)
+        added = 0
         for path in videos:
             if path not in existing:
                 self.pending_paths.append(path)
-                item = QListWidgetItem(path.name)
+                existing.add(path)
+                added += 1
+                item = QListWidgetItem(f"✓  {path.name}")
                 item.setToolTip(str(path))
                 item.setData(Qt.ItemDataRole.UserRole, str(path))
                 self.input_list.addItem(item)
+        total = len(self.pending_paths)
+        self.drop_area.set_summary(total)
+        if added:
+            self.import_status.setText(f"✓ 导入成功：本次新增 {added} 条，共 {total} 条视频等待分析")
+            self.import_status.setStyleSheet(
+                "background: #E4F1E6; color: #315C3A; border-radius: 8px; padding: 10px 13px; font-weight: 650;"
+            )
+        elif videos and total:
+            self.import_status.setText(f"这些视频已经在列表中，目前共 {total} 条")
+        else:
+            self.import_status.setText("没有找到支持的视频，请选择 MP4、MOV、MKV、AVI 等视频文件")
+            self.import_status.setStyleSheet(
+                "background: #F8E8E5; color: #91453E; border-radius: 8px; padding: 10px 13px; font-weight: 650;"
+            )
         self.start_button.setEnabled(bool(self.pending_paths) and not (self.worker and self.worker.isRunning()))
 
     def remove_selected_inputs(self) -> None:
@@ -454,6 +516,12 @@ class MainWindow(QMainWindow):
         self.pending_paths = [path for path in self.pending_paths if path not in selected]
         for item in self.input_list.selectedItems():
             self.input_list.takeItem(self.input_list.row(item))
+        total = len(self.pending_paths)
+        self.drop_area.set_summary(total)
+        self.import_status.setText(f"当前已有 {total} 条视频等待分析" if total else "尚未导入视频")
+        self.import_status.setStyleSheet(
+            "background: #E8E9E4; color: #5F635C; border-radius: 8px; padding: 10px 13px; font-weight: 600;"
+        )
         self.start_button.setEnabled(bool(self.pending_paths))
 
     def start_analysis(self) -> None:
@@ -461,7 +529,10 @@ class MainWindow(QMainWindow):
             return
         self.start_button.setEnabled(False)
         self.progress_label.setText("正在准备分析……")
-        config = AnalysisConfig.for_mode(str(self.mode_combo.currentData()))
+        config = AnalysisConfig.for_mode(
+            str(self.mode_combo.currentData()),
+            aspect_ratio=str(self.aspect_combo.currentData()),
+        )
         self.worker = AnalysisWorker(list(self.pending_paths), self.data_dir, self.store, config)
         self.worker.progress_changed.connect(self.update_progress)
         self.worker.video_completed.connect(self.analysis_completed)
