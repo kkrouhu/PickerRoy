@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from framepick.media import MediaError, probe_video, resolve_executable
@@ -18,7 +20,8 @@ def test_executable_override_works_with_minimal_path(tmp_path, monkeypatch):
 
 
 def test_bundled_executable_is_preferred(tmp_path, monkeypatch):
-    bundled = tmp_path / "bin" / "ffprobe"
+    executable_name = "ffprobe.exe" if os.name == "nt" else "ffprobe"
+    bundled = tmp_path / "bin" / executable_name
     bundled.parent.mkdir()
     bundled.write_text("test")
     bundled.chmod(0o755)
