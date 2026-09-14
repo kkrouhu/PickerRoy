@@ -1,0 +1,11 @@
+#!/bin/zsh
+set -e
+contents_dir="$(cd "$(dirname "$0")/.." && pwd)"
+project_dir="$(cd "$contents_dir/../.." && pwd)"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+if [[ ! -x "$project_dir/.venv/bin/pickerroy" ]]; then
+  osascript -e 'display dialog "PickerRoy 尚未安装。请先运行一次“安装 PickerRoy.command”。" buttons {"好"} default button "好" with icon caution'
+  exit 1
+fi
+cd "$project_dir"
+exec "$project_dir/.venv/bin/pickerroy"

@@ -64,9 +64,9 @@ def evaluate_manifest(manifest_path: str | Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Evaluate FramePick analysis against ground truth")
-    parser.add_argument("manifest", help="Path to a ground-truth manifest JSON")
-    parser.add_argument("--output", help="Optional path for JSON output")
+    parser = argparse.ArgumentParser(description="对照人工标准答案评测 PickerRoy")
+    parser.add_argument("manifest", help="人工标准答案 JSON 文件路径")
+    parser.add_argument("--output", help="可选的 JSON 报告输出路径")
     args = parser.parse_args(argv)
     report = evaluate_manifest(args.manifest)
     text = json.dumps(report, ensure_ascii=False, indent=2)

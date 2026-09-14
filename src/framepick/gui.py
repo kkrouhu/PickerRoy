@@ -40,9 +40,19 @@ from .pipeline import VideoAnalyzer, discover_videos
 
 LOGGER = logging.getLogger(__name__)
 
+CATEGORY_ZH = {
+    "Person": "人物",
+    "Action": "动作",
+    "Landscape": "风景",
+    "Animal": "动物",
+    "Product": "产品/装备",
+    "Detail": "细节/特写",
+    "Other": "其他",
+}
+
 
 APP_STYLE = """
-QWidget { background: #F4F4F1; color: #20211F; font-family: -apple-system, 'Inter', sans-serif; font-size: 14px; }
+QWidget { background: #F4F4F1; color: #20211F; font-family: 'PingFang SC', 'Helvetica Neue', sans-serif; font-size: 14px; }
 QMainWindow { background: #F4F4F1; }
 #sidebar { background: #171916; border: none; }
 #brand { color: #F7F8F4; background: transparent; font-size: 22px; font-weight: 700; padding: 10px 12px 20px 12px; }
@@ -151,7 +161,7 @@ class AnalysisWorker(QThread):
 class ImagePreviewDialog(QDialog):
     def __init__(self, candidate: Candidate, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"{candidate.timestamp:.3f}s")
+        self.setWindowTitle(f"画面预览 · {candidate.timestamp:.3f} 秒")
         self.resize(1100, 760)
         layout = QVBoxLayout(self)
         label = QLabel()
@@ -160,7 +170,8 @@ class ImagePreviewDialog(QDialog):
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("background: #111; border-radius: 8px;")
         layout.addWidget(label)
-        layout.addWidget(QLabel(f"{candidate.timestamp:.3f}s  ·  {', '.join(candidate.labels)}  ·  score {candidate.final_score:.2f}"))
+        categories = "、".join(CATEGORY_ZH.get(label, label) for label in candidate.labels)
+        layout.addWidget(QLabel(f"{candidate.timestamp:.3f} 秒  ·  {categories}  ·  评分 {candidate.final_score:.2f}"))
 
 
 class CandidateCard(QFrame):
@@ -186,17 +197,17 @@ class CandidateCard(QFrame):
         layout.addWidget(image)
         pills = QHBoxLayout()
         for text in candidate.labels[:3]:
-            label = QLabel(text)
+            label = QLabel(CATEGORY_ZH.get(text, text))
             label.setObjectName("pill")
             pills.addWidget(label)
         pills.addStretch()
         layout.addLayout(pills)
-        meta = QLabel(f"#{candidate.rank or '–'}  ·  {candidate.timestamp:.2f}s  ·  quality {candidate.final_score:.2f}")
+        meta = QLabel(f"推荐 #{candidate.rank or '–'}  ·  {candidate.timestamp:.2f} 秒  ·  评分 {candidate.final_score:.2f}")
         meta.setObjectName("meta")
         layout.addWidget(meta)
         controls = QHBoxLayout()
-        self.keep = QPushButton("Keep")
-        self.reject = QPushButton("Reject")
+        self.keep = QPushButton("保留")
+        self.reject = QPushButton("淘汰")
         self.reject.setObjectName("danger")
         self.favorite = QPushButton("★")
         self.favorite.setObjectName("favorite")
@@ -216,9 +227,9 @@ class CandidateCard(QFrame):
     def set_feedback(self, decision: str) -> None:
         active = "border: 2px solid #42634A;" if decision else ""
         self.setStyleSheet(active)
-        self.keep.setText("✓ Keep" if decision == "KEEP" else "Keep")
-        self.reject.setText("✓ Reject" if decision == "REJECT" else "Reject")
-        self.favorite.setText("★ Favorite" if decision == "FAVORITE" else "★")
+        self.keep.setText("✓ 已保留" if decision == "KEEP" else "保留")
+        self.reject.setText("✓ 已淘汰" if decision == "REJECT" else "淘汰")
+        self.favorite.setText("★ 已收藏" if decision == "FAVORITE" else "★")
 
 
 class MainWindow(QMainWindow):
@@ -226,13 +237,13 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.data_dir = data_dir
         self.log_path = log_path
-        self.store = FeedbackStore(data_dir / "framepick.sqlite3")
+        self.store = FeedbackStore(data_dir / "pickerroy.sqlite3")
         self.pending_paths: list[Path] = []
         self.results: list[AnalysisResult] = []
         self.feedback = self.store.latest_feedback()
         self.worker: AnalysisWorker | None = None
         self.current_pair: tuple[Candidate, Candidate] | None = None
-        self.setWindowTitle("FramePick Local")
+        self.setWindowTitle("PickerRoy")
         self.resize(1320, 860)
         self.setMinimumSize(1000, 680)
         self.setAcceptDrops(True)
@@ -250,12 +261,12 @@ class MainWindow(QMainWindow):
         sidebar.setFixedWidth(210)
         side_layout = QVBoxLayout(sidebar)
         side_layout.setContentsMargins(14, 22, 14, 18)
-        brand = QLabel("FramePick")
+        brand = QLabel("PickerRoy")
         brand.setObjectName("brand")
         side_layout.addWidget(brand)
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
-        nav_items = [("Import", 0), ("Results", 1), ("Preference", 2), ("Settings", 3)]
+        nav_items = [("导入", 0), ("筛选结果", 1), ("偏好训练", 2), ("设置", 3)]
         for label, index in nav_items:
             button = QPushButton(label)
             button.setObjectName("sideButton")
@@ -267,7 +278,7 @@ class MainWindow(QMainWindow):
             if index == 0:
                 button.setChecked(True)
         side_layout.addStretch()
-        log_button = QPushButton("Open logs")
+        log_button = QPushButton("打开运行日志")
         log_button.setObjectName("sideButton")
         log_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.log_path))))
         side_layout.addWidget(log_button)
@@ -295,13 +306,13 @@ class MainWindow(QMainWindow):
         return page, layout
 
     def _import_page(self) -> QWidget:
-        page, layout = self._page_shell("Import video", "FramePick will find scenes first, then let multiple frames compete inside each scene.")
+        page, layout = self._page_shell("导入视频", "PickerRoy 会先识别镜头，再让同一镜头里的多个画面竞争，找出最值得保存的瞬间。")
         self.drop_area = DropArea()
         self.drop_area.paths_dropped.connect(self.add_inputs)
         layout.addWidget(self.drop_area)
         buttons = QHBoxLayout()
-        add_videos = QPushButton("Add videos")
-        add_folder = QPushButton("Add folder")
+        add_videos = QPushButton("添加视频")
+        add_folder = QPushButton("添加文件夹")
         add_videos.clicked.connect(self.choose_videos)
         add_folder.clicked.connect(self.choose_folder)
         buttons.addWidget(add_videos)
@@ -313,9 +324,9 @@ class MainWindow(QMainWindow):
         self.input_list.setMinimumHeight(110)
         layout.addWidget(self.input_list)
         actions = QHBoxLayout()
-        remove = QPushButton("Remove selected")
+        remove = QPushButton("移除选中项目")
         remove.clicked.connect(self.remove_selected_inputs)
-        self.start_button = QPushButton("Analyze")
+        self.start_button = QPushButton("开始分析")
         self.start_button.setObjectName("primary")
         self.start_button.setEnabled(False)
         self.start_button.clicked.connect(self.start_analysis)
@@ -326,8 +337,8 @@ class MainWindow(QMainWindow):
         self.progress_panel = QFrame()
         self.progress_panel.setObjectName("panel")
         panel_layout = QVBoxLayout(self.progress_panel)
-        self.progress_label = QLabel("Ready")
-        self.progress_detail = QLabel("No video is being processed")
+        self.progress_label = QLabel("准备就绪")
+        self.progress_detail = QLabel("当前没有正在处理的视频")
         self.progress_detail.setObjectName("subtitle")
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 1000)
@@ -339,14 +350,18 @@ class MainWindow(QMainWindow):
         return page
 
     def _results_page(self) -> QWidget:
-        page, layout = self._page_shell("Recommended frames", "A compact, diverse set of technically usable moments. Click an image to preview it.")
+        page, layout = self._page_shell("推荐静帧", "系统已经过滤技术废片和近重复画面，并保留不同内容类型。点击图片可以放大预览。")
         toolbar = QHBoxLayout()
         self.category_filter = QComboBox()
-        self.category_filter.addItems(["All", "People", "Action", "Landscape", "Animal", "Product", "Detail"])
+        for text, value in [
+            ("全部", "All"), ("人物", "Person"), ("动作", "Action"), ("风景", "Landscape"),
+            ("动物", "Animal"), ("产品/装备", "Product"), ("细节/特写", "Detail"),
+        ]:
+            self.category_filter.addItem(text, value)
         self.category_filter.currentTextChanged.connect(self.refresh_results)
-        self.results_count = QLabel("No results")
+        self.results_count = QLabel("暂无结果")
         self.results_count.setObjectName("subtitle")
-        export = QPushButton("Export selected")
+        export = QPushButton("导出已选画面")
         export.setObjectName("primary")
         export.clicked.connect(self.export_selected)
         toolbar.addWidget(self.category_filter)
@@ -365,8 +380,8 @@ class MainWindow(QMainWindow):
         return page
 
     def _preference_page(self) -> QWidget:
-        page, layout = self._page_shell("Which frame is better?", "Pairs come from the same shot and nearby moments. Every choice is stored locally.")
-        self.preference_status = QLabel("Analyze a video to create preference pairs.")
+        page, layout = self._page_shell("哪一帧更好？", "每组画面来自同一个镜头和相近时间。你的每次选择都只保存在本机。")
+        self.preference_status = QLabel("分析视频后，这里会生成偏好对比。")
         self.preference_status.setObjectName("subtitle")
         layout.addWidget(self.preference_status)
         pair = QHBoxLayout()
@@ -378,7 +393,7 @@ class MainWindow(QMainWindow):
             image.setMinimumSize(340, 330)
             image.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             image.setStyleSheet("background: #20211F; color: white; border-radius: 12px; font-size: 28px;")
-            choose = QPushButton(f"Choose {side}")
+            choose = QPushButton(f"选择 {side}")
             choose.setObjectName("primary")
             choose.clicked.connect(lambda _checked=False, value=side: self.choose_preference(value))
             column.addWidget(image, 1)
@@ -386,22 +401,26 @@ class MainWindow(QMainWindow):
             pair.addLayout(column, 1)
             self.pair_images.append(image)
         layout.addLayout(pair, 1)
-        skip = QPushButton("Skip pair")
+        skip = QPushButton("跳过这一组")
         skip.clicked.connect(self.next_pair)
         layout.addWidget(skip, alignment=Qt.AlignmentFlag.AlignCenter)
         return page
 
     def _settings_page(self) -> QWidget:
-        page, layout = self._page_shell("Settings", "The defaults are intentionally simple. Modes change ranking priorities, not the original video.")
+        page, layout = self._page_shell("设置", "模式只会改变选帧侧重点，不会修改原视频。")
         panel = QFrame()
         panel.setObjectName("panel")
         panel_layout = QVBoxLayout(panel)
-        panel_layout.addWidget(QLabel("Selection mode"))
+        panel_layout.addWidget(QLabel("选帧模式"))
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Balanced", "Portrait", "Action", "Landscape", "Product"])
+        for text, value in [
+            ("综合", "Balanced"), ("人像", "Portrait"), ("动作", "Action"),
+            ("风景", "Landscape"), ("产品", "Product"),
+        ]:
+            self.mode_combo.addItem(text, value)
         panel_layout.addWidget(self.mode_combo)
         panel_layout.addSpacing(10)
-        data_note = QLabel(f"Local data: {self.data_dir}\nNo video, cache, export, API key, or feedback is uploaded.")
+        data_note = QLabel(f"本地数据位置：{self.data_dir}\n视频、缓存、导出图片和偏好数据都不会上传。")
         data_note.setObjectName("subtitle")
         data_note.setWordWrap(True)
         panel_layout.addWidget(data_note)
@@ -410,11 +429,11 @@ class MainWindow(QMainWindow):
         return page
 
     def choose_videos(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, "Choose videos", "", "Video files (*.mp4 *.mov *.m4v *.mkv *.avi *.webm *.mts *.m2ts *.mxf)")
+        paths, _ = QFileDialog.getOpenFileNames(self, "选择视频", "", "视频文件 (*.mp4 *.mov *.m4v *.mkv *.avi *.webm *.mts *.m2ts *.mxf)")
         self.add_inputs(paths)
 
     def choose_folder(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Choose a folder")
+        path = QFileDialog.getExistingDirectory(self, "选择包含视频的文件夹")
         if path:
             self.add_inputs([path])
 
@@ -441,8 +460,8 @@ class MainWindow(QMainWindow):
         if not self.pending_paths:
             return
         self.start_button.setEnabled(False)
-        self.progress_label.setText("Preparing analysis…")
-        config = AnalysisConfig.for_mode(self.mode_combo.currentText())
+        self.progress_label.setText("正在准备分析……")
+        config = AnalysisConfig.for_mode(str(self.mode_combo.currentData()))
         self.worker = AnalysisWorker(list(self.pending_paths), self.data_dir, self.store, config)
         self.worker.progress_changed.connect(self.update_progress)
         self.worker.video_completed.connect(self.analysis_completed)
@@ -452,17 +471,17 @@ class MainWindow(QMainWindow):
 
     def update_progress(self, payload: dict) -> None:
         stage_names = {
-            "scene_detection": "Detecting shots",
-            "sampling": "Analyzing candidate frames",
-            "ranking": "Removing duplicates and ranking",
-            "done": "Completed",
+            "scene_detection": "正在识别镜头",
+            "sampling": "正在分析候选画面",
+            "ranking": "正在去重并排序",
+            "done": "分析完成",
         }
-        stage = stage_names.get(payload.get("stage"), "Processing")
+        stage = stage_names.get(payload.get("stage"), "正在处理")
         self.progress_label.setText(f"{stage}: {payload.get('video', '')}")
         self.progress_detail.setText(
-            f"Video {payload.get('file_index', 1)}/{payload.get('file_total', 1)}  ·  "
-            f"Shot {payload.get('shot', 0)}/{payload.get('shots', '–')}  ·  "
-            f"Candidates {payload.get('candidates', 0)}"
+            f"视频 {payload.get('file_index', 1)}/{payload.get('file_total', 1)}  ·  "
+            f"镜头 {payload.get('shot', 0)}/{payload.get('shots', '–')}  ·  "
+            f"候选画面 {payload.get('candidates', 0)}"
         )
         self.progress_bar.setValue(round(float(payload.get("overall", 0)) * 1000))
 
@@ -475,17 +494,15 @@ class MainWindow(QMainWindow):
             button.setChecked(button.property("page") == 1)
 
     def analysis_failed(self, message: str) -> None:
-        self.progress_label.setText("Analysis stopped")
+        self.progress_label.setText("分析已停止")
         self.progress_detail.setText(message)
-        QMessageBox.critical(self, "FramePick could not finish", f"{message}\n\nDetails were saved to:\n{self.log_path}")
+        QMessageBox.critical(self, "PickerRoy 无法完成分析", f"{message}\n\n详细信息已保存到：\n{self.log_path}")
 
     def _visible_candidates(self) -> list[Candidate]:
         candidates = list(itertools.chain.from_iterable(result.candidates for result in self.results))
         candidates = [item for item in candidates if item.rank is not None and not item.rejected and not item.duplicate_of]
         candidates.sort(key=lambda item: (item.video_id, item.rank or 9999))
-        selected = self.category_filter.currentText()
-        mapping = {"People": "Person"}
-        category = mapping.get(selected, selected)
+        category = str(self.category_filter.currentData())
         if category != "All":
             candidates = [item for item in candidates if category in item.labels]
         return candidates
@@ -496,7 +513,7 @@ class MainWindow(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
         candidates = self._visible_candidates()
-        self.results_count.setText(f"{len(candidates)} recommended frames")
+        self.results_count.setText(f"共 {len(candidates)} 张推荐画面")
         columns = 3 if self.width() < 1450 else 4
         for index, candidate in enumerate(candidates):
             card = CandidateCard(candidate, self.feedback.get(candidate.id, ""))
@@ -514,14 +531,14 @@ class MainWindow(QMainWindow):
     def export_selected(self) -> None:
         selected = [item for item in self._visible_candidates() if self.feedback.get(item.id) in {"KEEP", "FAVORITE"}]
         if not selected:
-            QMessageBox.information(self, "Nothing selected", "Mark frames as Keep or Favorite first.")
+            QMessageBox.information(self, "尚未选择画面", "请先把需要导出的画面标记为“保留”或“收藏”。")
             return
-        destination = QFileDialog.getExistingDirectory(self, "Export selected frames")
+        destination = QFileDialog.getExistingDirectory(self, "选择导出文件夹")
         if not destination:
             return
         format_box = QMessageBox(self)
-        format_box.setWindowTitle("Export format")
-        format_box.setText("Choose full-resolution export format.")
+        format_box.setWindowTitle("选择导出格式")
+        format_box.setText("请选择原始分辨率的图片格式。")
         png_button = format_box.addButton("PNG", QMessageBox.ButtonRole.AcceptRole)
         jpg_button = format_box.addButton("JPEG", QMessageBox.ButtonRole.AcceptRole)
         format_box.addButton(QMessageBox.StandardButton.Cancel)
@@ -540,12 +557,12 @@ class MainWindow(QMainWindow):
                 if result.video.id in by_video:
                     outputs.extend(export_candidates(result.video, by_video[result.video.id], destination, image_format))
         except Exception as exc:
-            LOGGER.exception("Export failed")
-            QMessageBox.critical(self, "Export failed", str(exc))
+            LOGGER.exception("导出失败")
+            QMessageBox.critical(self, "导出失败", str(exc))
             return
         finally:
             QApplication.restoreOverrideCursor()
-        QMessageBox.information(self, "Export complete", f"Exported {len(outputs)} full-resolution frame(s).")
+        QMessageBox.information(self, "导出完成", f"已导出 {len(outputs)} 张原始分辨率画面。")
 
     def _pair_pool(self) -> list[tuple[Candidate, Candidate]]:
         pairs = []
@@ -565,7 +582,7 @@ class MainWindow(QMainWindow):
         pairs = self._pair_pool()
         if not pairs:
             self.current_pair = None
-            self.preference_status.setText("No nearby candidate pair is available yet.")
+            self.preference_status.setText("目前没有可供比较的相邻候选画面。")
             return
         current_id = self.current_pair[0].id if self.current_pair else ""
         index = next((i + 1 for i, pair in enumerate(pairs) if pair[0].id == current_id), 0) % len(pairs)
@@ -574,7 +591,7 @@ class MainWindow(QMainWindow):
             pixmap = QPixmap(candidate.preview_path)
             label.setPixmap(pixmap.scaled(520, 500, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         a, b = self.current_pair
-        self.preference_status.setText(f"Same shot · {a.timestamp:.2f}s versus {b.timestamp:.2f}s")
+        self.preference_status.setText(f"同一镜头 · {a.timestamp:.2f} 秒 对比 {b.timestamp:.2f} 秒")
 
     def choose_preference(self, side: str) -> None:
         if not self.current_pair:
@@ -585,7 +602,7 @@ class MainWindow(QMainWindow):
 
 
 def data_directory() -> Path:
-    override = os.environ.get("FRAMEPICK_DATA_DIR")
+    override = os.environ.get("PICKERROY_DATA_DIR") or os.environ.get("FRAMEPICK_DATA_DIR")
     if override:
         return Path(override).expanduser().resolve()
     from PySide6.QtCore import QStandardPaths

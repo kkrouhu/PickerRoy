@@ -4,6 +4,8 @@ import hashlib
 import json
 import logging
 import math
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -19,15 +21,33 @@ class MediaError(RuntimeError):
     pass
 
 
+def resolve_executable(name: str) -> str:
+    """Resolve media tools even when a macOS Finder launch supplies a minimal PATH."""
+    if Path(name).is_absolute():
+        return name
+    override = os.environ.get(f"FRAMEPICK_{name.upper()}")
+    if override and Path(override).is_file():
+        return override
+    discovered = shutil.which(name)
+    if discovered:
+        return discovered
+    for directory in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"):
+        candidate = Path(directory) / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return name
+
+
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+    command = [resolve_executable(command[0]), *command[1:]]
     LOGGER.debug("Running: %s", command)
     try:
         return subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as exc:
-        raise MediaError(f"Missing required executable: {command[0]}") from exc
+        raise MediaError(f"找不到视频组件：{Path(command[0]).name}。请重新运行“安装 PickerRoy.command”。") from exc
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip()[-1500:] if exc.stderr else str(exc)
-        raise MediaError(message) from exc
+        raise MediaError(f"视频处理失败：{message}") from exc
 
 
 def _fraction(value: str | None) -> float:
@@ -47,16 +67,16 @@ def probe_video(path: str | Path) -> VideoInfo:
     data = json.loads(completed.stdout)
     video_stream = next((row for row in data.get("streams", []) if row.get("codec_type") == "video"), None)
     if not video_stream:
-        raise MediaError(f"No video stream found: {source.name}")
+        raise MediaError(f"文件中没有可读取的视频轨道：{source.name}")
     duration = float(video_stream.get("duration") or data.get("format", {}).get("duration") or 0)
     if duration <= 0:
-        raise MediaError(f"Could not determine video duration: {source.name}")
+        raise MediaError(f"无法读取视频时长：{source.name}")
     transfer = video_stream.get("color_transfer", "")
     primaries = video_stream.get("color_primaries", "")
     color_space = video_stream.get("color_space", "")
     warning = ""
     if transfer in {"smpte2084", "arib-std-b67"} or primaries == "bt2020":
-        warning = "HDR/BT.2020 source detected; exports preserve FFmpeg's decoded appearance but should be color-checked."
+        warning = "检测到 HDR/BT.2020 视频；导出会保持 FFmpeg 解码后的画面，但建议检查颜色。"
     signature = f"{source}:{source.stat().st_size}:{source.stat().st_mtime_ns}".encode()
     return VideoInfo(
         id=hashlib.sha1(signature).hexdigest()[:16],
@@ -82,7 +102,7 @@ def extract_preview(source: str | Path, timestamp: float, destination: str | Pat
         "-q:v", "2", "-y", str(destination),
     ])
     if not destination.exists() or destination.stat().st_size == 0:
-        raise MediaError(f"FFmpeg did not create preview at {timestamp:.3f}s")
+        raise MediaError(f"无法生成 {timestamp:.3f} 秒处的预览图")
     return destination
 
 
@@ -100,7 +120,7 @@ def export_frame(source: str | Path, timestamp: float, destination: str | Path, 
 def read_image(path: str | Path) -> np.ndarray:
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is None or image.size == 0:
-        raise MediaError(f"Could not decode extracted frame: {path}")
+        raise MediaError(f"无法解码抽取的画面：{path}")
     return image
 
 
@@ -142,4 +162,3 @@ def candidate_timestamps(start: float, end: float, motion: float, min_count: int
         return [start + duration / 2]
     values = np.linspace(start + margin, max(start + margin, end - margin), count)
     return [round(float(value), 6) for value in values]
-

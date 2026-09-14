@@ -1,8 +1,8 @@
-# Ground-truth evaluation
+# 人工标准答案评测
 
-Private source videos and private labels belong in `evaluation/private/`, which Git ignores.
+私人原视频和人工标签应放在 `evaluation/private/`，该目录不会被 Git 收录。
 
-Each target is a desired moment. The tolerance permits equivalent neighboring frames:
+每个 target 代表一个真正想保留的瞬间，tolerance 允许视觉上等价的相邻帧：
 
 ```json
 {
@@ -19,5 +19,4 @@ Each target is a desired moment. The tolerance permits equivalent neighboring fr
 }
 ```
 
-Run `framepick-evaluate evaluation/private/ground_truth.json`. The report includes Top-1/3/5/10 hit rate, duplicate rate, technical rejection rate, category coverage, and the number of recommendations shown.
-
+运行 `pickerroy-evaluate evaluation/private/ground_truth.json`。报告会计算 Top-1/3/5/10 命中率、重复率、技术废片淘汰率、类别覆盖率和展示候选数量。

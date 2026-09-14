@@ -1,38 +1,42 @@
-# FramePick Local
+# PickerRoy
 
-FramePick is a local desktop tool that searches video shots for photograph-worthy still frames. It is designed for photographers and content creators: import videos or folders, wait for shot-aware analysis, review a compact grid, mark Keep/Favorite, and export full-resolution PNG or JPEG frames.
+PickerRoy 是一款完全在本机运行的视频静帧智能筛选工具，面向摄影师和内容创作者。它不会简单地每隔几秒截图，而是先识别镜头，再从每个镜头的多个候选画面中挑选清晰、有代表性且彼此不同的瞬间。
 
-![FramePick results interface](docs/GUI_PREVIEW.png)
+![PickerRoy 中文结果界面](docs/GUI_PREVIEW.png)
 
-## Start on this Mac
+## 直接使用
 
-The included project has already been installed and tested on the development machine. Double-click **FramePick.app**. If the project is moved to another Mac, run **Install FramePick.command** once first.
+这台电脑已经安装完成。双击 **PickerRoy.app** 即可启动。
 
-## Current workflow
+如果把整个项目移动到另一台 Mac，请先双击 **安装 PickerRoy.command**，安装完成后再打开应用。
 
-- Drop one video, many videos, or a folder into Import.
-- Choose Balanced, Portrait, Action, Landscape, or Product in Settings.
-- Analyze. Progress reports the current video, completed shot count, and candidate count.
-- Filter Results by People, Action, Landscape, Animal, Product, or Detail.
-- Mark frames Keep, Reject, or Favorite. Feedback is saved to a local SQLite database.
-- Open Preference to choose A or B between nearby frames from the same shot.
-- Export kept/favorite frames as full-resolution PNG or high-quality JPEG.
+## 使用流程
 
-## Privacy and color
+1. 在“导入”页面拖入一个视频、多个视频或包含视频的文件夹。
+2. 如有需要，在“设置”中选择综合、人像、动作、风景或产品模式。
+3. 点击“开始分析”。界面会显示当前视频、镜头进度和候选画面数量。
+4. 在“筛选结果”中按人物、动作、风景、动物、产品/装备或细节/特写筛选。
+5. 把需要的画面标记为“保留”或“收藏”，不需要的标记为“淘汰”。
+6. 点击“导出已选画面”，选择 PNG 或 JPEG。导出使用原视频分辨率。
+7. 在“偏好训练”中选择 A 或 B，帮助下一轮学习你的选帧偏好。
 
-No media or feedback is uploaded. Cache, database, logs, and exports are excluded from Git. Rec.709 is decoded directly by FFmpeg. HDR/BT.2020 inputs are detected and carry a warning in analysis metadata; version 0.1 does not silently apply a homemade grade.
+## 隐私与颜色
 
-## Developer commands
+视频、缓存、导出图片和偏好数据都不会上传。缓存、数据库、日志、私有测试素材和导出图片均已排除在 Git 之外。
+
+Rec.709 视频直接通过 FFmpeg 解码。检测到 HDR/BT.2020 时会记录警告；当前版本不会擅自给视频套调色。
+
+## 开发与评测命令
 
 ```bash
 .venv/bin/pytest
-.venv/bin/framepick-analyze /path/to/video.mov --data-dir work/data
-.venv/bin/framepick-evaluate evaluation/private/ground_truth.json
+.venv/bin/pickerroy-analyze /视频路径/示例.mov --data-dir work/data
+.venv/bin/pickerroy-evaluate evaluation/private/ground_truth.json
 .venv/bin/python scripts/run_synthetic_benchmark.py
 ```
 
-See [architecture](docs/ARCHITECTURE.md), [testing](docs/TESTING.md), and [ground-truth format](evaluation/README.md).
+详细资料：[技术架构](docs/ARCHITECTURE.md)、[测试说明](docs/TESTING.md)、[人工标准答案格式](evaluation/README.md)、[首轮调试报告](docs/FIRST_ROUND_REPORT.md)。
 
-## Repository policy
+## 仓库规则
 
-This repository intentionally has no license yet. Do not commit personal footage, private ground truth, caches, exported frames, databases, logs, tokens, or API keys.
+当前没有替用户决定开源许可证。不要提交私人视频、私有 Ground Truth、缓存、导出图片、数据库、日志、Token、API Key 或个人路径。

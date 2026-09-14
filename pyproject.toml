@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "framepick-local"
+name = "pickerroy"
 version = "0.1.0"
-description = "Local-first video still-frame discovery for photographers and creators"
+description = "本地运行的视频静帧智能筛选工具"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -24,9 +24,9 @@ mac = [
 dev = ["pytest>=8,<9"]
 
 [project.scripts]
-framepick = "framepick.app:main"
-framepick-analyze = "framepick.cli:main"
-framepick-evaluate = "framepick.evaluation:main"
+pickerroy = "framepick.app:main"
+pickerroy-analyze = "framepick.cli:main"
+pickerroy-evaluate = "framepick.evaluation:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

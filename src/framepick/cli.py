@@ -11,11 +11,11 @@ from .pipeline import VideoAnalyzer, discover_videos
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Analyze videos with FramePick Local")
-    parser.add_argument("inputs", nargs="+", help="Video files or folders")
-    parser.add_argument("--data-dir", default=".framepick-data", help="Cache, database, and log directory")
+    parser = argparse.ArgumentParser(description="使用 PickerRoy 分析视频")
+    parser.add_argument("inputs", nargs="+", help="视频文件或文件夹")
+    parser.add_argument("--data-dir", default=".pickerroy-data", help="缓存、数据库和日志目录")
     parser.add_argument("--mode", default="Balanced", choices=["Balanced", "Portrait", "Action", "Landscape", "Product"])
-    parser.add_argument("--json", action="store_true", help="Print machine-readable summary")
+    parser.add_argument("--json", action="store_true", help="输出 JSON 格式结果")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).resolve()
     configure_logging(data_dir)
@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     analyzer = VideoAnalyzer(data_dir, AnalysisConfig.for_mode(args.mode), store)
     videos = discover_videos(args.inputs)
     if not videos:
-        parser.error("No supported videos were found")
+        parser.error("没有找到支持的视频文件")
     summaries = []
     for path in videos:
         result = analyzer.analyze(path)
@@ -44,4 +44,3 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(summaries, ensure_ascii=False, indent=2))
     return 0
-

@@ -22,7 +22,7 @@ def main() -> int:
     output = Path(args.output).resolve()
     data_dir = output.parent / "gui-data"
     app = QApplication([])
-    app.setApplicationName("FramePick Local")
+    app.setApplicationName("PickerRoy")
     app.setStyle("Fusion")
     app.setStyleSheet(APP_STYLE)
     window = MainWindow(data_dir, configure_logging(data_dir))
@@ -44,4 +44,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

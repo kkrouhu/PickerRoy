@@ -1,50 +1,53 @@
-# First-round build and debug report
+# 首轮构建与调试报告
 
-Date: 2026-09-14
+日期：2026-09-14
 
-## What was exercised
+## 已实际测试
 
-- Environment detection on an Apple M3 Max Mac
-- Single-file and recursive folder discovery
-- FFprobe metadata extraction
-- Four-shot scene detection on generated H.264 test media
-- Shot-adaptive sampling and 16 candidate analyses
-- Black/blank-frame rejection
-- Apple Vision execution outside the development sandbox
-- Automatic OpenCV fallback when Vision is unavailable
-- Temporal scoring, perceptual deduplication, and diversity ranking
-- Full-resolution PNG export (1280 × 720 source remained 1280 × 720)
-- SQLite analysis, feedback, and pairwise-preference writes
-- Qt GUI construction and 1320 × 860 visual render
-- Missing-video error handling
+- Apple M3 Max 环境检测
+- 单文件、多文件和递归文件夹发现
+- FFprobe 视频元数据读取
+- 合成 H.264 视频的四镜头检测
+- 镜头自适应采样和 16 个候选画面分析
+- 黑场与空白画面过滤
+- 原生环境下运行 Apple Vision
+- Vision 不可用时自动切换 OpenCV
+- 时序评分、感知去重和多样性排序
+- 全分辨率 PNG 导出（1280 × 720 输入保持 1280 × 720）
+- SQLite 分析结果、反馈和 A/B 偏好写入
+- Qt 中文界面构建和 1320 × 860 视觉渲染
+- 缺失视频和缺失工具错误处理
+- 模拟 Finder 最小 PATH 环境启动和完整分析
 
-## Automated status
+## 自动化状态
 
-- Tests: 12 passed
-- Synthetic input: 10.04 seconds, 4 detected shots
-- Candidates analyzed: 16
-- Candidates presented: 9
-- Technical rejections: 3 (the intended black segment)
-- Candidates removed as visually duplicate: 6
-- Full-resolution exports verified: 2
-- Feedback writes verified: 1
-- Pairwise preference writes verified: 1
-- Analysis time: about 3.2 seconds on this machine
+- 测试：13 项通过
+- 合成输入：10.04 秒，检测出 4 个镜头
+- 分析候选：16 张
+- 最终展示：9 张
+- 技术淘汰：3 张（预期中的黑场）
+- 视觉近重复移除：6 张
+- 全分辨率导出验证：2 张
+- 反馈写入验证：1 条
+- A/B 偏好写入验证：1 条
+- 本机分析耗时：约 3.2 秒
 
-## Synthetic ground-truth metrics
+## 合成 Ground Truth 指标
 
-- Top-1 hit rate: 33.3%
-- Top-3 hit rate: 66.7%
-- Top-5 hit rate: 66.7%
-- Top-10 hit rate: 100%
-- Duplicate rate among presented recommendations: 0%
-- Source candidates identified and pruned as duplicate: 30.8%
-- Technical rejection rate: 18.8%
-- Category coverage: 16.7% (the synthetic source only contains test graphics)
-- Recommendations presented: 9
+- Top-1 命中率：33.3%
+- Top-3 命中率：66.7%
+- Top-5 命中率：66.7%
+- Top-10 命中率：100%
+- 最终推荐重复率：0%
+- 原始候选中识别并移除的重复比例：30.8%
+- 技术淘汰率：18.8%
+- 类别覆盖率：16.7%（合成视频只包含测试图形）
+- 展示候选：9 张
 
-These figures validate plumbing, not photographic taste. No real-world accuracy claim is possible until real footage has human-labelled desired frames.
+这些数字只能验证工程链路，不能证明摄影审美准确率。真实视频没有人工标记前，不对真实选帧准确率作任何夸大。
 
-## Runtime defect found and fixed
+## 已发现并修复的运行问题
 
-The first full run exposed that macOS Vision can import successfully but fail at inference inside a restricted process. That exception initially caused otherwise valid candidates to be rejected. Classification is now isolated from technical analysis and automatically switches once to the OpenCV CPU backend. A second native run confirmed that Apple Vision works when the app is started normally.
+第一次完整运行发现，受限进程可能允许导入 macOS Vision，却在推理时失败。这个异常原先会连带淘汰有效画面。现在语义分类已经与技术分析隔离，失败时只会自动切换到 OpenCV。原生环境测试确认 Apple Vision 可以正常工作。
+
+用户第一次从 Finder 打开应用后又发现 `ffprobe` 无法找到。根因是 Finder 不继承 Homebrew 的终端 PATH。当前启动器和 Python 内部都增加了独立的工具路径解析，并在模拟 Finder 的最小 PATH 环境下完成了完整视频分析。

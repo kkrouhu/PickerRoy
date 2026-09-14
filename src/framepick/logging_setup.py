@@ -8,7 +8,7 @@ from pathlib import Path
 def configure_logging(data_dir: Path) -> Path:
     log_dir = data_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / "framepick.log"
+    log_path = log_dir / "pickerroy.log"
     root = logging.getLogger()
     if not root.handlers:
         root.setLevel(logging.INFO)
@@ -20,4 +20,3 @@ def configure_logging(data_dir: Path) -> Path:
         console.setFormatter(formatter)
         root.addHandler(console)
     return log_path
-

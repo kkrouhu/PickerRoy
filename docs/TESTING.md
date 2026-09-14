@@ -1,6 +1,5 @@
-# Testing
+# 测试说明
 
-`pytest` runs unit tests for technical filtering, hashing, temporal peaks, diversity ranking, persistence, and an FFmpeg integration test.
+`pytest` 会测试技术过滤、感知哈希、时序峰值、多样性排序、数据库持久化和 FFmpeg 集成流程。
 
-The synthetic benchmark is an engineering sanity check only. It verifies shot boundaries, peak coverage, deduplication, export, database writes, and metrics. It is not evidence of real photographic taste accuracy. Real accuracy numbers require user-labelled real footage in `evaluation/private/`.
-
+合成 benchmark 只用于工程检查：验证镜头边界、峰值覆盖、去重、导出、数据库写入和指标计算。它不能证明真实摄影审美准确率。真实准确率必须使用放在 `evaluation/private/` 中、由用户人工标记的真实视频计算。

@@ -1,24 +1,24 @@
-# Architecture
+# 技术架构
 
-FramePick is deliberately local-first and modular:
+PickerRoy 采用本地优先、模块化的设计：
 
-1. `ffprobe` records stream, frame-rate, resolution, and color metadata.
-2. PySceneDetect's adaptive content detector separates shots.
-3. Each shot gets a motion estimate from four tiny temporary probes.
-4. Sampling density changes with shot duration and motion. Short and dynamic shots get denser competition.
-5. Technical metrics reject blank, black, clipped, severely soft, and failed frames before aesthetic ranking.
-6. macOS Vision supplies local semantic labels and face presence. An OpenCV CPU fallback keeps the pipeline portable.
-7. Category-specific formulas separately rank portrait, action, landscape, animal, product, detail, and other frames.
-8. Temporal peak scoring compares local frame-to-frame change and quality curves inside the same shot.
-9. A 64-bit perceptual hash removes near duplicates; a diversity-aware ranker limits category and shot domination.
-10. FFmpeg seeks back to the source only on export, producing a full-resolution PNG or high-quality JPEG.
+1. `ffprobe` 读取视频轨道、帧率、分辨率和颜色元数据。
+2. PySceneDetect 自适应内容检测器划分镜头。
+3. 每个镜头通过四张低分辨率临时画面估算运动强度。
+4. 采样密度随镜头长度和运动强度变化，短镜头和动态镜头会有更密集的候选竞争。
+5. 在审美排序前过滤空白、黑场、严重过曝、严重模糊和解码失败画面。
+6. macOS Vision 在本机提供语义标签和人脸检测；OpenCV CPU 后端负责兼容性回退。
+7. 人像、动作、风景、动物、产品、细节和其他内容分别采用不同评分公式。
+8. 时序峰值评分比较同一镜头内的局部帧间变化和质量曲线。
+9. 64 位感知哈希去除近重复；多样性排序避免单一类别或镜头霸榜。
+10. 只有导出时才回到原视频定位，由 FFmpeg 生成全分辨率 PNG 或高质量 JPEG。
 
-The cache holds 960-pixel previews rather than decoded video. Processing is shot-by-shot and candidate-by-candidate, so long inputs do not accumulate in memory.
+缓存只保存宽度 960 像素的预览图，不保存完整解码视频。处理按镜头和候选逐个进行，长视频不会全部堆积在内存中。
 
-## Honest limitations of version 0.1
+## 0.1 版本的真实局限
 
-- Face presence is available, but reliable closed-eye, pose, limb-state, and occlusion scoring are not yet implemented.
-- macOS Vision labels are broad. OpenCV fallback classification is intentionally conservative and will overuse `Other`.
-- Perceptual hashing catches visually near-identical frames but is weaker than learned embeddings across camera movement.
-- HDR/BT.2020 is detected and warned about, but a full managed HDR-to-SDR color pipeline is not included.
-- The category weights are engineering priors, not trained preference weights. Pairwise data is stored but not learned from yet.
+- 已能检测人脸，但还没有可靠的闭眼、姿态、肢体状态和遮挡评分。
+- macOS Vision 标签较宽泛；OpenCV 回退分类比较保守，会较多使用“其他”。
+- 感知哈希擅长发现近乎相同的画面，但镜头移动明显时不如学习型视觉 embedding。
+- 能检测并提示 HDR/BT.2020，但尚未加入完整的 HDR 到 SDR 色彩管理。
+- 当前类别权重来自工程经验，不是训练出来的个人偏好权重；A/B 数据已保存，但尚未参与学习。

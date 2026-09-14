@@ -113,9 +113,9 @@ class FeedbackStore:
 
     def record_preference(self, a: Candidate, b: Candidate, winner: Candidate) -> None:
         if a.video_id != b.video_id or a.shot_id != b.shot_id:
-            raise ValueError("Preference candidates must come from the same shot")
+            raise ValueError("偏好对比的两张图片必须来自同一个镜头")
         if winner.id not in {a.id, b.id}:
-            raise ValueError("Winner must be candidate A or B")
+            raise ValueError("胜出画面必须是 A 或 B")
         with self._lock, self._connect() as conn:
             conn.execute(
                 """INSERT INTO preferences
@@ -131,4 +131,3 @@ class FeedbackStore:
                 "feedback": conn.execute("SELECT COUNT(*) FROM feedback").fetchone()[0],
                 "preferences": conn.execute("SELECT COUNT(*) FROM preferences").fetchone()[0],
             }
-

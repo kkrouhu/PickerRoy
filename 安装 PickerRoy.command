@@ -8,5 +8,4 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 else
   .venv/bin/pip install -e '.[dev]'
 fi
-osascript -e 'display dialog "FramePick installation is complete. Double-click Open FramePick.command to start." buttons {"OK"} default button "OK"'
-
+osascript -e 'display dialog "PickerRoy 安装完成。现在可以双击 PickerRoy.app 启动。" buttons {"好"} default button "好"'
