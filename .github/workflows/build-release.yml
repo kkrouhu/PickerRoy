@@ -55,12 +55,12 @@ jobs:
           test -s work/ci-self-test/output/self-test-report.json
       - name: 独立应用冒烟测试（Windows）
         if: runner.os == 'Windows'
-        shell: powershell
+        shell: pwsh
         run: |
           New-Item -ItemType Directory -Force work\ci-self-test
           ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=24:duration=3" -pix_fmt yuv420p work\ci-self-test\input.mp4
           dist\PickerRoy\PickerRoy.exe --self-test work\ci-self-test\input.mp4 work\ci-self-test\output
-          if (-not (Test-Path work\ci-self-test\output\self-test-report.json)) { throw "独立应用自检报告不存在" }
+          if (-not (Test-Path work\ci-self-test\output\self-test-report.json)) { throw "Standalone self-test report is missing" }
       - name: 打包 macOS 应用
         if: runner.os == 'macOS'
         shell: bash
