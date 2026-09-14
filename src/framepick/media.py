@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 from .models import VideoInfo
+from .resources import resource_candidates
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,12 +23,16 @@ class MediaError(RuntimeError):
 
 
 def resolve_executable(name: str) -> str:
-    """Resolve media tools even when a macOS Finder launch supplies a minimal PATH."""
+    """Resolve bundled media tools and minimal-PATH launches on macOS/Windows."""
     if Path(name).is_absolute():
         return name
     override = os.environ.get(f"FRAMEPICK_{name.upper()}")
     if override and Path(override).is_file():
         return override
+    executable_name = f"{name}.exe" if os.name == "nt" and not name.lower().endswith(".exe") else name
+    for candidate in resource_candidates(Path("bin") / executable_name):
+        if candidate.is_file() and (os.name == "nt" or os.access(candidate, os.X_OK)):
+            return str(candidate)
     discovered = shutil.which(name)
     if discovered:
         return discovered
@@ -44,7 +49,7 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as exc:
-        raise MediaError(f"找不到视频组件：{Path(command[0]).name}。请重新运行“安装 PickerRoy.command”。") from exc
+        raise MediaError(f"找不到视频组件：{Path(command[0]).name}。请在“设置”中查看运行环境自检。") from exc
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip()[-1500:] if exc.stderr else str(exc)
         raise MediaError(f"视频处理失败：{message}") from exc

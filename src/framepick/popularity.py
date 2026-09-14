@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from .models import Candidate
+from .resources import resource_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def default_model_path() -> Path:
     override = os.environ.get("PICKERROY_POPULARITY_MODEL")
     if override:
         return Path(override).expanduser().resolve()
-    return Path(__file__).resolve().parents[2] / "models" / "intrinsic_popularity_resnet50.onnx"
+    return resource_path("models/intrinsic_popularity_resnet50.onnx")
 
 
 class IntrinsicPopularityScorer:

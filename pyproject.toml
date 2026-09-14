@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pickerroy"
-version = "0.1.0"
+version = "0.2.0"
 description = "本地运行的视频静帧智能筛选工具"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ mac = [
   "pyobjc-framework-Vision>=10.3",
   "pyobjc-framework-Quartz>=10.3",
 ]
-dev = ["pytest>=8,<9"]
+dev = ["pytest>=8,<9", "pyinstaller>=6.14,<7"]
 
 [project.scripts]
 pickerroy = "framepick.app:main"

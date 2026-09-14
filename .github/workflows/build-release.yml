@@ -1,0 +1,104 @@
+name: Build and release PickerRoy
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            artifact: PickerRoy-macOS-Intel
+          - os: macos-14
+            artifact: PickerRoy-macOS-Apple-Silicon
+          - os: windows-2022
+            artifact: PickerRoy-Windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: 安装 Python 依赖
+        shell: bash
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: 安装 macOS 内容识别组件
+        if: runner.os == 'macOS'
+        run: python -m pip install -e ".[mac]"
+      - name: 安装 FFmpeg（macOS）
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - name: 安装 FFmpeg（Windows）
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install ffmpeg -y --no-progress
+      - name: 测试
+        run: python -m pytest
+      - name: 构建独立应用
+        run: python scripts/build_standalone.py
+      - name: 独立应用冒烟测试（macOS）
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p work/ci-self-test
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=24:duration=3" -pix_fmt yuv420p work/ci-self-test/input.mp4
+          dist/PickerRoy.app/Contents/MacOS/PickerRoy --self-test work/ci-self-test/input.mp4 work/ci-self-test/output
+          test -s work/ci-self-test/output/self-test-report.json
+      - name: 独立应用冒烟测试（Windows）
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force work\ci-self-test
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=24:duration=3" -pix_fmt yuv420p work\ci-self-test\input.mp4
+          dist\PickerRoy\PickerRoy.exe --self-test work\ci-self-test\input.mp4 work\ci-self-test\output
+          if (-not (Test-Path work\ci-self-test\output\self-test-report.json)) { throw "独立应用自检报告不存在" }
+      - name: 打包 macOS 应用
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent dist/PickerRoy.app "release/${{ matrix.artifact }}.zip"
+          shasum -a 256 "release/${{ matrix.artifact }}.zip" > "release/${{ matrix.artifact }}.zip.sha256"
+      - name: 打包 Windows 应用
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force release
+          Compress-Archive -Path dist\PickerRoy -DestinationPath "release\${{ matrix.artifact }}.zip"
+          (Get-FileHash "release\${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.artifact }}.zip" | Set-Content "release\${{ matrix.artifact }}.zip.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: 打包 Codex Skill 与使用说明书
+        shell: bash
+        run: |
+          cd skills
+          zip -r "../release/PickerRoy-Codex-Skill-${GITHUB_REF_NAME}.zip" pickerroy
+          cd ..
+          sha256sum "release/PickerRoy-Codex-Skill-${GITHUB_REF_NAME}.zip" > "release/PickerRoy-Codex-Skill-${GITHUB_REF_NAME}.zip.sha256"
+          cp "docs/manual/PickerRoy中文使用说明书.pdf" "release/PickerRoy中文使用说明书-${GITHUB_REF_NAME}.pdf"
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/* --generate-notes --title "PickerRoy ${GITHUB_REF_NAME}"

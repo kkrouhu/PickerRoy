@@ -16,9 +16,11 @@ from framepick.pipeline import load_analysis
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("analysis")
+    parser.add_argument("analysis", nargs="?")
     parser.add_argument("output")
     parser.add_argument("--import-video", help="渲染已导入视频的中文导入页面")
+    parser.add_argument("--page", choices=("import", "results", "preference", "settings"), default="results")
+    parser.add_argument("--aspect", default="original")
     args = parser.parse_args()
     output = Path(args.output).resolve()
     data_dir = output.parent / "gui-data"
@@ -29,11 +31,15 @@ def main() -> int:
     window = MainWindow(data_dir, configure_logging(data_dir))
     if args.import_video:
         window.add_inputs([args.import_video])
-        window.pages.setCurrentIndex(0)
-    else:
+        aspect_index = window.aspect_combo.findData(args.aspect)
+        if aspect_index >= 0:
+            window.aspect_combo.setCurrentIndex(aspect_index)
+    if args.analysis:
         window.results = [load_analysis(args.analysis)]
-        window.pages.setCurrentIndex(1)
         window.refresh_results()
+        window.next_pair()
+    page_index = {"import": 0, "results": 1, "preference": 2, "settings": 3}[args.page]
+    window.pages.setCurrentIndex(page_index)
     window.show()
 
     def capture() -> None:

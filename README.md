@@ -6,9 +6,13 @@ PickerRoy 是一款完全在本机运行的视频静帧智能筛选工具，面�
 
 ## 直接使用
 
-这台电脑已经安装完成。双击 **PickerRoy.app** 即可启动。
+普通用户从 GitHub Releases 下载与电脑匹配的 ZIP：Apple 芯片 Mac、Intel Mac 或 Windows x64。解压后直接打开 PickerRoy；独立应用已经包含 Python、视频引擎和热门视觉模型，不需要安装 Codex。
 
-如果把整个项目移动到另一台 Mac，请先双击 **安装 PickerRoy.command**，安装完成后再打开应用。
+Codex Skill 是另外一个可选下载，只用于让 Codex 更了解 PickerRoy 的安装、使用、测试与排错方式。它不是桌面应用，单独下载 Skill 不能代替 PickerRoy。
+
+首次启动和系统安全提示见[下载、安装与发布说明](docs/DISTRIBUTION.md)。
+
+完整图文步骤可直接查看[《PickerRoy 中文使用说明书》PDF](docs/manual/PickerRoy中文使用说明书.pdf)，也可以阅读[网页友好的 Markdown 版本](docs/manual/PickerRoy中文使用说明书.md)。
 
 ## 使用流程
 
@@ -46,7 +50,7 @@ Rec.709 视频直接通过 FFmpeg 解码。检测到 HDR/BT.2020 时会记录警
 .venv/bin/python scripts/run_preference_smoke.py /视频路径/示例.mov work/preference-smoke
 ```
 
-详细资料：[技术架构](docs/ARCHITECTURE.md)、[测试说明](docs/TESTING.md)、[人工标准答案格式](evaluation/README.md)、[首轮调试报告](docs/FIRST_ROUND_REPORT.md)。
+详细资料：[技术架构](docs/ARCHITECTURE.md)、[测试说明](docs/TESTING.md)、[人工标准答案格式](evaluation/README.md)、[首轮调试报告](docs/FIRST_ROUND_REPORT.md)、[第三方许可说明](THIRD_PARTY_NOTICES.md)。
 
 ## 仓库规则
 

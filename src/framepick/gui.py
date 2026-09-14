@@ -37,6 +37,7 @@ from .database import FeedbackStore
 from .exporter import export_candidates
 from .models import AnalysisResult, Candidate
 from .pipeline import VideoAnalyzer, discover_videos
+from .runtime import runtime_checks, runtime_ready
 
 LOGGER = logging.getLogger(__name__)
 
@@ -261,6 +262,7 @@ class MainWindow(QMainWindow):
         self.feedback = self.store.latest_feedback()
         self.worker: AnalysisWorker | None = None
         self.current_pair: tuple[Candidate, Candidate] | None = None
+        self.environment_ready = False
         self.setWindowTitle("PickerRoy")
         self.resize(1320, 860)
         self.setMinimumSize(1000, 680)
@@ -455,7 +457,25 @@ class MainWindow(QMainWindow):
         return page
 
     def _settings_page(self) -> QWidget:
-        page, layout = self._page_shell("设置", "模式只会改变选帧侧重点，不会修改原视频。")
+        page, layout = self._page_shell("设置", "先确认运行环境，再按内容选择选帧侧重点；所有处理都在本机完成。")
+        health_panel = QFrame()
+        health_panel.setObjectName("panel")
+        health_layout = QVBoxLayout(health_panel)
+        health_header = QHBoxLayout()
+        health_header.addWidget(QLabel("运行环境自检"))
+        health_header.addStretch()
+        refresh_health = QPushButton("重新检查")
+        refresh_health.clicked.connect(self.refresh_runtime_status)
+        health_header.addWidget(refresh_health)
+        health_layout.addLayout(health_header)
+        self.runtime_summary = QLabel()
+        self.runtime_summary.setWordWrap(True)
+        health_layout.addWidget(self.runtime_summary)
+        self.runtime_details = QLabel()
+        self.runtime_details.setObjectName("subtitle")
+        self.runtime_details.setWordWrap(True)
+        health_layout.addWidget(self.runtime_details)
+        layout.addWidget(health_panel)
         panel = QFrame()
         panel.setObjectName("panel")
         panel_layout = QVBoxLayout(panel)
@@ -474,7 +494,19 @@ class MainWindow(QMainWindow):
         panel_layout.addWidget(data_note)
         layout.addWidget(panel)
         layout.addStretch()
+        self.refresh_runtime_status()
         return page
+
+    def refresh_runtime_status(self) -> None:
+        checks = runtime_checks()
+        self.environment_ready = runtime_ready(checks)
+        self.runtime_summary.setText("✓ 可以开始使用" if self.environment_ready else "需要处理后才能分析视频")
+        self.runtime_summary.setStyleSheet(
+            "color: #315C3A; font-weight: 700;" if self.environment_ready else "color: #91453E; font-weight: 700;"
+        )
+        self.runtime_details.setText("\n".join(f"{'✓' if row.ready else '✕'} {row.label}：{row.detail}" for row in checks))
+        if hasattr(self, "start_button"):
+            self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready and not (self.worker and self.worker.isRunning()))
 
     def choose_videos(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, "选择视频", "", "视频文件 (*.mp4 *.mov *.m4v *.mkv *.avi *.webm *.mts *.m2ts *.mxf)")
@@ -512,7 +544,7 @@ class MainWindow(QMainWindow):
             self.import_status.setStyleSheet(
                 "background: #F8E8E5; color: #91453E; border-radius: 8px; padding: 10px 13px; font-weight: 650;"
             )
-        self.start_button.setEnabled(bool(self.pending_paths) and not (self.worker and self.worker.isRunning()))
+        self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready and not (self.worker and self.worker.isRunning()))
 
     def remove_selected_inputs(self) -> None:
         selected = {Path(item.data(Qt.ItemDataRole.UserRole)) for item in self.input_list.selectedItems()}
@@ -525,10 +557,13 @@ class MainWindow(QMainWindow):
         self.import_status.setStyleSheet(
             "background: #E8E9E4; color: #5F635C; border-radius: 8px; padding: 10px 13px; font-weight: 600;"
         )
-        self.start_button.setEnabled(bool(self.pending_paths))
+        self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready)
 
     def start_analysis(self) -> None:
         if not self.pending_paths:
+            return
+        if not self.environment_ready:
+            QMessageBox.warning(self, "运行环境未就绪", "请先打开“设置”查看运行环境自检结果。")
             return
         self.start_button.setEnabled(False)
         self.progress_label.setText("正在准备分析……")
@@ -540,7 +575,7 @@ class MainWindow(QMainWindow):
         self.worker.progress_changed.connect(self.update_progress)
         self.worker.video_completed.connect(self.analysis_completed)
         self.worker.failed.connect(self.analysis_failed)
-        self.worker.finished.connect(lambda: self.start_button.setEnabled(bool(self.pending_paths)))
+        self.worker.finished.connect(lambda: self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready))
         self.worker.start()
 
     def update_progress(self, payload: dict) -> None:
@@ -562,6 +597,10 @@ class MainWindow(QMainWindow):
 
     def analysis_completed(self, result: AnalysisResult) -> None:
         self.results = [row for row in self.results if row.video.id != result.video.id] + [result]
+        recommended = len([item for item in result.candidates if item.rank is not None and not item.rejected and not item.duplicate_of])
+        self.progress_label.setText(f"✓ 分析完成：{Path(result.video.path).name}")
+        self.progress_detail.setText(f"已生成 {recommended} 张推荐画面，可在“筛选结果”中保留、收藏或导出。")
+        self.progress_bar.setValue(1000)
         self.refresh_results()
         self.next_pair()
         self.pages.setCurrentIndex(1)
