@@ -43,8 +43,18 @@ jobs:
         run: choco install ffmpeg -y --no-progress
       - name: 测试
         run: python -m pytest
-      - name: 构建独立应用
+      - name: 构建独立应用（macOS）
+        if: runner.os == 'macOS'
         run: python scripts/build_standalone.py
+      - name: 构建独立应用（Windows）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tools = Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
+          $ffmpeg = Get-ChildItem $tools -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          $ffprobe = Get-ChildItem $tools -Recurse -Filter ffprobe.exe | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) { throw "Real FFmpeg binaries were not found" }
+          python scripts/build_standalone.py --ffmpeg $ffmpeg.FullName --ffprobe $ffprobe.FullName
       - name: 独立应用冒烟测试（macOS）
         if: runner.os == 'macOS'
         shell: bash
