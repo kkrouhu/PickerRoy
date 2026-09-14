@@ -2,7 +2,15 @@ import cv2
 import numpy as np
 import pytest
 
-from framepick.quality import hamming_distance, perceptual_hash, smart_crop_to_aspect, technical_metrics, temporal_motion_series
+from framepick.quality import (
+    aesthetic_metrics,
+    hamming_distance,
+    optimized_export_image,
+    perceptual_hash,
+    smart_crop_to_aspect,
+    technical_metrics,
+    temporal_motion_series,
+)
 
 
 def test_black_frame_is_rejected():
@@ -48,3 +56,23 @@ def test_smart_crop_produces_requested_ratios():
     assert portrait.shape[1] / portrait.shape[0] == pytest.approx(2 / 3, abs=0.01)
     assert square_box[2] < 1.0
     assert portrait_box[2] < square_box[2]
+
+
+def test_theme_aesthetic_metrics_are_bounded():
+    image = np.zeros((360, 640, 3), dtype=np.uint8)
+    image[:180] = (210, 135, 70)
+    image[180:] = (45, 125, 55)
+    cv2.line(image, (0, 240), (639, 240), (245, 245, 245), 4)
+    scores = aesthetic_metrics(image)
+    assert 0 <= scores["landscape_aesthetic"] <= 1
+    assert 0 <= scores["horizon_composition"] <= 1
+    assert scores["portrait_aesthetic"] == 0
+
+
+def test_optimized_export_recovers_pixels_with_safety_limits():
+    image = np.full((900, 600, 3), 120, dtype=np.uint8)
+    enhanced = optimized_export_image(image, 3840, 2160)
+    assert enhanced.shape[0] > image.shape[0]
+    assert enhanced.shape[1] > image.shape[1]
+    assert enhanced.shape[0] <= image.shape[0] * 2
+    assert enhanced.shape[0] * enhanced.shape[1] <= 24_000_000

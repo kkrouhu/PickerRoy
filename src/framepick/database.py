@@ -153,6 +153,88 @@ class FeedbackStore:
             for winner, loser in rows
         ]
 
+    def training_pairs(self, limit: int = 800) -> list[tuple[Candidate, Candidate]]:
+        """Combine explicit A/B choices with the user's latest keep/favorite/reject decisions."""
+        pairs: list[tuple[Candidate, Candidate]] = []
+        seen: set[tuple[str, str]] = set()
+        for winner, loser in self.preference_pairs():
+            key = (winner.id, loser.id)
+            if key not in seen:
+                seen.add(key)
+                pairs.append((winner, loser))
+        with self._connect() as conn:
+            feedback_rows = conn.execute(
+                """SELECT candidate.payload_json, feedback.decision
+                FROM feedback
+                JOIN candidates candidate ON candidate.id=feedback.candidate_id
+                JOIN (SELECT candidate_id, MAX(id) AS max_id FROM feedback GROUP BY candidate_id) latest
+                  ON latest.max_id=feedback.id
+                WHERE feedback.decision != 'CLEAR'
+                ORDER BY feedback.id"""
+            ).fetchall()
+            candidate_rows = conn.execute("SELECT payload_json FROM candidates ORDER BY rowid").fetchall()
+
+        decisions: dict[str, tuple[Candidate, str]] = {}
+        for payload, decision in feedback_rows:
+            candidate = Candidate.from_dict(json.loads(payload))
+            decisions[candidate.id] = (candidate, decision)
+        all_candidates = [Candidate.from_dict(json.loads(row[0])) for row in candidate_rows]
+
+        by_video: dict[str, list[Candidate]] = {}
+        for candidate in all_candidates:
+            by_video.setdefault(candidate.video_id, []).append(candidate)
+        def add(winner: Candidate, loser: Candidate) -> None:
+            key = (winner.id, loser.id)
+            if winner.id != loser.id and key not in seen and len(pairs) < limit:
+                seen.add(key)
+                pairs.append((winner, loser))
+
+        for video_candidates in by_video.values():
+            favorites = [item for item in video_candidates if decisions.get(item.id, (None, ""))[1] == "FAVORITE"]
+            kept = [item for item in video_candidates if decisions.get(item.id, (None, ""))[1] == "KEEP"]
+            rejected = [item for item in video_candidates if decisions.get(item.id, (None, ""))[1] == "REJECT"]
+            neutral = [item for item in video_candidates if item.id not in decisions and not item.rejected]
+            for winner in favorites:
+                for loser in (rejected + kept)[:40]:
+                    add(winner, loser)
+                for loser in [item for item in neutral if item.shot_id == winner.shot_id][:6]:
+                    add(winner, loser)
+            for winner in kept:
+                for loser in rejected[:40]:
+                    add(winner, loser)
+            for loser in rejected:
+                for winner in [item for item in neutral if item.shot_id == loser.shot_id][:6]:
+                    add(winner, loser)
+        return pairs[:limit]
+
+    def personalization_stats(self) -> dict[str, object]:
+        latest = self.latest_feedback()
+        counts = self.counts()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT candidate.categories_json, feedback.decision
+                FROM feedback
+                JOIN candidates candidate ON candidate.id=feedback.candidate_id
+                JOIN (SELECT candidate_id, MAX(id) AS max_id FROM feedback GROUP BY candidate_id) latest
+                  ON latest.max_id=feedback.id
+                WHERE feedback.decision != 'CLEAR'"""
+            ).fetchall()
+        decisions = {name: sum(1 for value in latest.values() if value == name)
+                     for name in ("FAVORITE", "KEEP", "REJECT")}
+        categories: dict[str, int] = {}
+        for raw_categories, decision in rows:
+            if decision not in {"FAVORITE", "KEEP"}:
+                continue
+            for category in json.loads(raw_categories):
+                categories[category] = categories.get(category, 0) + (2 if decision == "FAVORITE" else 1)
+        ordered_categories = sorted(categories.items(), key=lambda row: (-row[1], row[0]))
+        return {
+            **counts,
+            "decisions": decisions,
+            "training_pairs": len(self.training_pairs()),
+            "top_categories": ordered_categories[:3],
+        }
+
     def counts(self) -> dict[str, int]:
         with self._connect() as conn:
             return {

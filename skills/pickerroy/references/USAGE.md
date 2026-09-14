@@ -29,17 +29,30 @@ Unzip the archive completely and keep the `PickerRoy` folder intact. Open the fo
 2. Drag in one or more videos or a folder. Confirm the green banner shows the newly added count and total count.
 3. Choose original, 1:1, 3:2, 2:3, 4:3, 3:4, 16:9, or 9:16 before analysis.
 4. Optionally choose Balanced, Portrait, Action, Landscape, or Product mode.
-5. Start analysis and wait for the completion summary.
+5. Start analysis. Use Pause/Resume when temporarily freeing resources, or Cancel to stop safely. New videos added during a run wait for the next batch.
 6. Filter by category, inspect large previews, and mark frames Keep, Reject, or Favorite.
-7. Export kept/favorite frames as PNG or JPEG. Exports use source resolution and the selected crop.
-8. In Preference Training, select A or B. New choices participate from the next analysis.
+7. Export kept/favorite frames as PNG or JPEG. Choose Direct for a faithful source decode/crop, or Optimized to recover cropped pixel dimensions (up to 2× per side and 24 MP) with gentle tone, color, and sharpening.
+8. Keep, Favorite, Reject, and Preference Training A/B choices all teach the private local preference model. New choices participate from the next analysis.
+
+## Two personalization levels
+
+- Built-in self-adaptation: requires only the app. A user processes several representative videos, marks what they love/keep/reject, and makes a few A/B choices. The Preference Training page shows progress. Different local choices create different local ranking models.
+- Codex-assisted engineering: optional. The Skill helps Codex summarize the local database, diagnose systematic misses, edit the source, test, rebuild, and—only when authorized—publish a new release. This requires Codex and a source checkout; ordinary app use does not.
+
+The database path is displayed in Settings. To create a privacy-preserving JSON summary from a source checkout or installed Skill:
+
+```bash
+python skills/pickerroy/scripts/profile_preferences.py "/path/shown/by/PickerRoy/pickerroy.sqlite3"
+```
 
 ## Diagnosis
 
 - Import button remains disabled: the environment check failed or no supported video was added.
 - No supported video found: use MP4, MOV, M4V, MKV, AVI, WEBM, MTS, M2TS, or MXF.
 - Analysis failure: open the run log from the left sidebar and preserve the final error lines.
+- Pause appears delayed: an already-running platform decoder may need a moment to reach a safe pause boundary. Cancel safely terminates it.
 - No export: first mark at least one frame Keep or Favorite.
+- Optimized export is larger but not truly more detailed: the feature reconstructs pixel dimensions and improves presentation; it cannot invent source detail.
 - Missing Windows files: re-extract the full ZIP; do not move only the EXE out of its folder.
 - Unexpected color with HDR/BT.2020: compare the PNG in a color-managed viewer; do not assume a social-media viewer is displaying HDR correctly.
 

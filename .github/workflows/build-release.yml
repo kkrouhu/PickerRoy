@@ -109,6 +109,8 @@ jobs:
           cd ..
           sha256sum "release/PickerRoy-Codex-Skill-${GITHUB_REF_NAME}.zip" > "release/PickerRoy-Codex-Skill-${GITHUB_REF_NAME}.zip.sha256"
           cp "docs/manual/PickerRoy中文使用说明书.pdf" "release/PickerRoy中文使用说明书-${GITHUB_REF_NAME}.pdf"
+          cp "docs/manual/PickerRoy-English-User-Manual.pdf" "release/PickerRoy-English-User-Manual-${GITHUB_REF_NAME}.pdf"
+          cp "docs/manual/PickerRoy中英双语使用说明书.pdf" "release/PickerRoy中英双语使用说明书-${GITHUB_REF_NAME}.pdf"
       - name: 创建 GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

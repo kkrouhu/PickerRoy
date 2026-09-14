@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -33,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from .config import AnalysisConfig, VIDEO_EXTENSIONS
+from .control import AnalysisCancelled, AnalysisControl
 from .database import FeedbackStore
 from .exporter import export_candidates
 from .models import AnalysisResult, Candidate
@@ -148,6 +150,7 @@ class AnalysisWorker(QThread):
     progress_changed = Signal(dict)
     video_completed = Signal(object)
     failed = Signal(str)
+    cancelled = Signal()
 
     def __init__(self, paths: list[Path], data_dir: Path, store: FeedbackStore, config: AnalysisConfig):
         super().__init__()
@@ -155,10 +158,20 @@ class AnalysisWorker(QThread):
         self.data_dir = data_dir
         self.store = store
         self.config = config
+        self.control = AnalysisControl()
+
+    def pause(self) -> None:
+        self.control.pause()
+
+    def resume(self) -> None:
+        self.control.resume()
+
+    def cancel(self) -> None:
+        self.control.cancel()
 
     def run(self) -> None:
         try:
-            analyzer = VideoAnalyzer(self.data_dir, self.config, self.store)
+            analyzer = VideoAnalyzer(self.data_dir, self.config, self.store, control=self.control)
             total = len(self.paths)
             for index, path in enumerate(self.paths):
                 def relay(payload: dict, item=index) -> None:
@@ -170,6 +183,8 @@ class AnalysisWorker(QThread):
 
                 result = analyzer.analyze(path, relay)
                 self.video_completed.emit(result)
+        except AnalysisCancelled:
+            self.cancelled.emit()
         except Exception as exc:
             LOGGER.exception("Analysis worker failed")
             self.failed.emit(str(exc))
@@ -189,6 +204,40 @@ class ImagePreviewDialog(QDialog):
         layout.addWidget(label)
         categories = "、".join(CATEGORY_ZH.get(label, label) for label in candidate.labels)
         layout.addWidget(QLabel(f"{candidate.timestamp:.3f} 秒  ·  {categories}  ·  评分 {candidate.final_score:.2f}"))
+
+
+class ExportOptionsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("导出画面")
+        self.setMinimumWidth(510)
+        layout = QVBoxLayout(self)
+        title = QLabel("选择导出方式")
+        title.setStyleSheet("font-size: 18px; font-weight: 700;")
+        layout.addWidget(title)
+        layout.addWidget(QLabel("你可以保留原始画面，也可以一键补足裁切后的像素并温和优化观感。"))
+        self.mode = QComboBox()
+        self.mode.addItem("直接导出（忠实保留原画）", False)
+        self.mode.addItem("优化后导出（补像素 + 色彩/对比/锐度）", True)
+        layout.addWidget(self.mode)
+        note = QLabel(
+            "优化会使用高质量插值，把裁切损失的像素量尽量补回（单边最高 2 倍、最高 2400 万像素），"
+            "并进行克制的色彩、局部对比和锐度处理。它能改善观看与交付尺寸，但不会凭空恢复原视频里不存在的真实细节。"
+        )
+        note.setObjectName("subtitle")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        layout.addWidget(QLabel("图片格式"))
+        self.format = QComboBox()
+        self.format.addItem("PNG（无损、文件较大）", "PNG")
+        self.format.addItem("JPEG（高质量、文件较小）", "JPEG")
+        layout.addWidget(self.format)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("开始导出")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
 
 
 class CandidateCard(QFrame):
@@ -258,11 +307,14 @@ class MainWindow(QMainWindow):
         self.log_path = log_path
         self.store = FeedbackStore(data_dir / "pickerroy.sqlite3")
         self.pending_paths: list[Path] = []
+        self.active_paths: set[Path] = set()
         self.results: list[AnalysisResult] = []
         self.feedback = self.store.latest_feedback()
         self.worker: AnalysisWorker | None = None
         self.current_pair: tuple[Candidate, Candidate] | None = None
         self.environment_ready = False
+        self.batch_cancelled = False
+        self.batch_failed = False
         self.setWindowTitle("PickerRoy")
         self.resize(1320, 860)
         self.setMinimumSize(1000, 680)
@@ -392,9 +444,21 @@ class MainWindow(QMainWindow):
         self.progress_detail.setObjectName("subtitle")
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 1000)
+        progress_controls = QHBoxLayout()
+        progress_controls.addStretch()
+        self.pause_button = QPushButton("暂停分析")
+        self.pause_button.setEnabled(False)
+        self.pause_button.clicked.connect(self.toggle_pause)
+        self.cancel_button = QPushButton("取消分析")
+        self.cancel_button.setObjectName("danger")
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.clicked.connect(self.cancel_analysis)
+        progress_controls.addWidget(self.pause_button)
+        progress_controls.addWidget(self.cancel_button)
         panel_layout.addWidget(self.progress_label)
         panel_layout.addWidget(self.progress_detail)
         panel_layout.addWidget(self.progress_bar)
+        panel_layout.addLayout(progress_controls)
         layout.addWidget(self.progress_panel)
         layout.addStretch()
         return page
@@ -431,6 +495,20 @@ class MainWindow(QMainWindow):
 
     def _preference_page(self) -> QWidget:
         page, layout = self._page_shell("哪一帧更好？", "每组画面来自同一个镜头和相近时间。你的选择只保存在本机，并从下一次分析开始参与排序。")
+        learning_panel = QFrame()
+        learning_panel.setObjectName("panel")
+        learning_layout = QVBoxLayout(learning_panel)
+        self.personalization_title = QLabel("你的专属 PickerRoy 正在起步")
+        self.personalization_title.setStyleSheet("font-size: 17px; font-weight: 700;")
+        self.personalization_detail = QLabel()
+        self.personalization_detail.setObjectName("subtitle")
+        self.personalization_detail.setWordWrap(True)
+        self.personalization_progress = QProgressBar()
+        self.personalization_progress.setRange(0, 100)
+        learning_layout.addWidget(self.personalization_title)
+        learning_layout.addWidget(self.personalization_detail)
+        learning_layout.addWidget(self.personalization_progress)
+        layout.addWidget(learning_panel)
         self.preference_status = QLabel("分析视频后，这里会生成偏好对比。")
         self.preference_status.setObjectName("subtitle")
         layout.addWidget(self.preference_status)
@@ -454,6 +532,7 @@ class MainWindow(QMainWindow):
         skip = QPushButton("跳过这一组")
         skip.clicked.connect(self.next_pair)
         layout.addWidget(skip, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.refresh_personalization_status()
         return page
 
     def _settings_page(self) -> QWidget:
@@ -533,7 +612,10 @@ class MainWindow(QMainWindow):
         total = len(self.pending_paths)
         self.drop_area.set_summary(total)
         if added:
-            self.import_status.setText(f"✓ 导入成功：本次新增 {added} 条，共 {total} 条视频等待分析")
+            if self.worker and self.worker.isRunning():
+                self.import_status.setText(f"✓ 已加入下一轮：新增 {added} 条；当前分析结束后可继续开始")
+            else:
+                self.import_status.setText(f"✓ 导入成功：本次新增 {added} 条，共 {total} 条视频等待分析")
             self.import_status.setStyleSheet(
                 "background: #E4F1E6; color: #315C3A; border-radius: 8px; padding: 10px 13px; font-weight: 650;"
             )
@@ -547,17 +629,21 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready and not (self.worker and self.worker.isRunning()))
 
     def remove_selected_inputs(self) -> None:
-        selected = {Path(item.data(Qt.ItemDataRole.UserRole)) for item in self.input_list.selectedItems()}
+        selected = {
+            Path(item.data(Qt.ItemDataRole.UserRole)) for item in self.input_list.selectedItems()
+            if Path(item.data(Qt.ItemDataRole.UserRole)) not in self.active_paths
+        }
         self.pending_paths = [path for path in self.pending_paths if path not in selected]
-        for item in self.input_list.selectedItems():
-            self.input_list.takeItem(self.input_list.row(item))
+        self._refresh_input_items()
         total = len(self.pending_paths)
         self.drop_area.set_summary(total)
         self.import_status.setText(f"当前已有 {total} 条视频等待分析" if total else "尚未导入视频")
         self.import_status.setStyleSheet(
             "background: #E8E9E4; color: #5F635C; border-radius: 8px; padding: 10px 13px; font-weight: 600;"
         )
-        self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready)
+        self.start_button.setEnabled(
+            bool(self.pending_paths) and self.environment_ready and not (self.worker and self.worker.isRunning())
+        )
 
     def start_analysis(self) -> None:
         if not self.pending_paths:
@@ -566,6 +652,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "运行环境未就绪", "请先打开“设置”查看运行环境自检结果。")
             return
         self.start_button.setEnabled(False)
+        self.batch_cancelled = False
+        self.batch_failed = False
+        self.active_paths = set(self.pending_paths)
+        self._refresh_input_items()
         self.progress_label.setText("正在准备分析……")
         config = AnalysisConfig.for_mode(
             str(self.mode_combo.currentData()),
@@ -575,8 +665,34 @@ class MainWindow(QMainWindow):
         self.worker.progress_changed.connect(self.update_progress)
         self.worker.video_completed.connect(self.analysis_completed)
         self.worker.failed.connect(self.analysis_failed)
-        self.worker.finished.connect(lambda: self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready))
+        self.worker.cancelled.connect(self.analysis_cancelled)
+        self.worker.finished.connect(self.analysis_finished)
+        self.pause_button.setEnabled(True)
+        self.cancel_button.setEnabled(True)
+        self.pause_button.setText("暂停分析")
         self.worker.start()
+
+    def toggle_pause(self) -> None:
+        if not self.worker or not self.worker.isRunning():
+            return
+        if self.worker.control.is_paused:
+            self.worker.resume()
+            self.pause_button.setText("暂停分析")
+            self.progress_label.setText("正在恢复分析……")
+        else:
+            self.worker.pause()
+            self.pause_button.setText("继续分析")
+            self.progress_label.setText("⏸ 分析已暂停")
+            self.progress_detail.setText("可以继续导入新视频；它们会进入下一轮。")
+
+    def cancel_analysis(self) -> None:
+        if not self.worker or not self.worker.isRunning():
+            return
+        self.worker.cancel()
+        self.pause_button.setEnabled(False)
+        self.cancel_button.setEnabled(False)
+        self.progress_label.setText("正在取消分析……")
+        self.progress_detail.setText("正在安全停止当前解码任务，已完成的视频结果会保留。")
 
     def update_progress(self, payload: dict) -> None:
         stage_names = {
@@ -597,20 +713,52 @@ class MainWindow(QMainWindow):
 
     def analysis_completed(self, result: AnalysisResult) -> None:
         self.results = [row for row in self.results if row.video.id != result.video.id] + [result]
+        completed_path = Path(result.video.path).resolve()
+        self.pending_paths = [path for path in self.pending_paths if path.resolve() != completed_path]
+        self.active_paths.discard(completed_path)
+        self._refresh_input_items()
         recommended = len([item for item in result.candidates if item.rank is not None and not item.rejected and not item.duplicate_of])
         self.progress_label.setText(f"✓ 分析完成：{Path(result.video.path).name}")
         self.progress_detail.setText(f"已生成 {recommended} 张推荐画面，可在“筛选结果”中保留、收藏或导出。")
         self.progress_bar.setValue(1000)
         self.refresh_results()
         self.next_pair()
-        self.pages.setCurrentIndex(1)
-        for button in self.nav_group.buttons():
-            button.setChecked(button.property("page") == 1)
+        self.refresh_personalization_status()
 
     def analysis_failed(self, message: str) -> None:
+        self.batch_failed = True
         self.progress_label.setText("分析已停止")
         self.progress_detail.setText(message)
         QMessageBox.critical(self, "PickerRoy 无法完成分析", f"{message}\n\n详细信息已保存到：\n{self.log_path}")
+
+    def analysis_cancelled(self) -> None:
+        self.batch_cancelled = True
+        self.progress_label.setText("已取消分析")
+        self.progress_detail.setText("已安全停止；已完成的视频结果仍可在“筛选结果”中查看，未完成视频保留在列表。")
+
+    def analysis_finished(self) -> None:
+        self.active_paths.clear()
+        self.pause_button.setEnabled(False)
+        self.cancel_button.setEnabled(False)
+        self.pause_button.setText("暂停分析")
+        self.worker = None
+        self._refresh_input_items()
+        self.start_button.setEnabled(bool(self.pending_paths) and self.environment_ready)
+        if self.results and not self.batch_cancelled and not self.batch_failed:
+            self.pages.setCurrentIndex(1)
+            for button in self.nav_group.buttons():
+                button.setChecked(button.property("page") == 1)
+
+    def _refresh_input_items(self) -> None:
+        self.input_list.clear()
+        for path in self.pending_paths:
+            prefix = "▶" if path in self.active_paths else "✓"
+            suffix = "（正在分析）" if path in self.active_paths else ""
+            item = QListWidgetItem(f"{prefix}  {path.name}{suffix}")
+            item.setToolTip(str(path))
+            item.setData(Qt.ItemDataRole.UserRole, str(path))
+            self.input_list.addItem(item)
+        self.drop_area.set_summary(len(self.pending_paths))
 
     def _visible_candidates(self) -> list[Candidate]:
         candidates = list(itertools.chain.from_iterable(result.candidates for result in self.results))
@@ -641,6 +789,7 @@ class MainWindow(QMainWindow):
     def record_feedback(self, candidate: Candidate, decision: str) -> None:
         self.store.record_feedback(candidate, decision)
         self.feedback[candidate.id] = decision
+        self.refresh_personalization_status()
 
     def export_selected(self) -> None:
         selected = [item for item in self._visible_candidates() if self.feedback.get(item.id) in {"KEEP", "FAVORITE"}]
@@ -650,17 +799,11 @@ class MainWindow(QMainWindow):
         destination = QFileDialog.getExistingDirectory(self, "选择导出文件夹")
         if not destination:
             return
-        format_box = QMessageBox(self)
-        format_box.setWindowTitle("选择导出格式")
-        format_box.setText("请选择原始分辨率的图片格式。")
-        png_button = format_box.addButton("PNG", QMessageBox.ButtonRole.AcceptRole)
-        jpg_button = format_box.addButton("JPEG", QMessageBox.ButtonRole.AcceptRole)
-        format_box.addButton(QMessageBox.StandardButton.Cancel)
-        format_box.exec()
-        clicked = format_box.clickedButton()
-        if clicked not in {png_button, jpg_button}:
+        options = ExportOptionsDialog(self)
+        if options.exec() != QDialog.DialogCode.Accepted:
             return
-        image_format = "PNG" if clicked is png_button else "JPEG"
+        image_format = str(options.format.currentData())
+        optimized = bool(options.mode.currentData())
         by_video: dict[str, list[Candidate]] = defaultdict(list)
         for item in selected:
             by_video[item.video_id].append(item)
@@ -669,14 +812,17 @@ class MainWindow(QMainWindow):
         try:
             for result in self.results:
                 if result.video.id in by_video:
-                    outputs.extend(export_candidates(result.video, by_video[result.video.id], destination, image_format))
+                    outputs.extend(export_candidates(
+                        result.video, by_video[result.video.id], destination, image_format, optimized=optimized
+                    ))
         except Exception as exc:
             LOGGER.exception("导出失败")
             QMessageBox.critical(self, "导出失败", str(exc))
             return
         finally:
             QApplication.restoreOverrideCursor()
-        QMessageBox.information(self, "导出完成", f"已导出 {len(outputs)} 张原始分辨率画面。")
+        mode_text = "优化后" if optimized else "直接"
+        QMessageBox.information(self, "导出完成", f"已{mode_text}导出 {len(outputs)} 张画面。")
 
     def _pair_pool(self) -> list[tuple[Candidate, Candidate]]:
         pairs = []
@@ -714,7 +860,41 @@ class MainWindow(QMainWindow):
             return
         a, b = self.current_pair
         self.store.record_preference(a, b, a if side == "A" else b)
+        self.refresh_personalization_status()
         self.next_pair()
+
+    def refresh_personalization_status(self) -> None:
+        if not hasattr(self, "personalization_title"):
+            return
+        stats = self.store.personalization_stats()
+        pairs = int(stats["training_pairs"])
+        videos = int(stats["videos"])
+        progress = min(100, round(100 * pairs / 50))
+        self.personalization_progress.setValue(progress)
+        if pairs >= 50:
+            title = "你的专属 PickerRoy 已形成稳定偏好"
+        elif pairs >= 15:
+            title = "PickerRoy 正在明显适应你的审美"
+        elif pairs:
+            title = "PickerRoy 已开始认识你的选择"
+        else:
+            title = "你的专属 PickerRoy 正在起步"
+        decisions = stats["decisions"]
+        top = "、".join(CATEGORY_ZH.get(name, name) for name, _count in stats["top_categories"]) or "尚未形成"
+        self.personalization_title.setText(title)
+        self.personalization_detail.setText(
+            f"已分析 {videos} 条视频，形成 {pairs} 组有效学习对；"
+            f"收藏 {decisions['FAVORITE']}、保留 {decisions['KEEP']}、淘汰 {decisions['REJECT']}。"
+            f"当前偏好方向：{top}。继续选择画面，下一次分析会自动应用新的本机模型。"
+        )
+
+    def closeEvent(self, event) -> None:
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            if not self.worker.wait(5000):
+                event.ignore()
+                return
+        event.accept()
 
 
 def data_directory() -> Path:

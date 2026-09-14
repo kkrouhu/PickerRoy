@@ -7,6 +7,8 @@
 - 64 位 Windows 10/11：`PickerRoy-Windows-x64.zip`
 - `PickerRoy-Codex-Skill-*.zip` 不是应用，只给 Codex 增加 PickerRoy 的安装、使用与排错知识。
 
+每次 Release 同时提供中文、English 和中英双语 PDF 使用说明书。Skill 还可帮助 Codex生成不包含媒体和路径的本机偏好摘要，并在用户明确要求时做源码级定向优化。
+
 独立应用已经包含 Python、运行库、FFmpeg/FFprobe 和热门视觉模型。普通用户无需安装 Codex，也无需执行命令行安装。
 
 ## 首次打开

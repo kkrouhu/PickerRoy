@@ -48,10 +48,10 @@ def build_styles():
         "title": ParagraphStyle("title", parent=base["Title"], fontName=FONT, fontSize=27, leading=36, textColor=INK, alignment=TA_CENTER, spaceAfter=6 * mm),
         "h1": ParagraphStyle("h1", parent=base["Heading1"], fontName=FONT, fontSize=18, leading=25, textColor=INK, spaceBefore=6 * mm, spaceAfter=3 * mm, keepWithNext=True),
         "h2": ParagraphStyle("h2", parent=base["Heading2"], fontName=FONT, fontSize=14, leading=20, textColor=GREEN, spaceBefore=4 * mm, spaceAfter=2 * mm, keepWithNext=True),
-        "body": ParagraphStyle("body", parent=base["BodyText"], fontName=FONT, fontSize=10.4, leading=17, textColor=INK, alignment=TA_LEFT, spaceAfter=2.4 * mm),
+        "body": ParagraphStyle("body", parent=base["BodyText"], fontName=FONT, fontSize=10.0, leading=16, textColor=INK, alignment=TA_LEFT, spaceAfter=2.1 * mm),
         "small": ParagraphStyle("small", parent=base["BodyText"], fontName=FONT, fontSize=8.5, leading=13, textColor=MUTED, spaceAfter=2 * mm),
-        "bullet": ParagraphStyle("bullet", parent=base["BodyText"], fontName=FONT, fontSize=10.2, leading=16, textColor=INK),
-        "table": ParagraphStyle("table", parent=base["BodyText"], fontName=FONT, fontSize=8.5, leading=12, textColor=INK),
+        "bullet": ParagraphStyle("bullet", parent=base["BodyText"], fontName=FONT, fontSize=9.8, leading=15, textColor=INK),
+        "table": ParagraphStyle("table", parent=base["BodyText"], fontName=FONT, fontSize=8.2, leading=11.5, textColor=INK),
     }
 
 
@@ -62,7 +62,7 @@ def page_decoration(canvas, document):
     canvas.rect(0, height - 13 * mm, width, 13 * mm, fill=1, stroke=0)
     canvas.setFont(FONT, 8)
     canvas.setFillColor(MUTED)
-    canvas.drawString(17 * mm, height - 8.5 * mm, "PickerRoy · 本地视频静帧筛选")
+    canvas.drawString(17 * mm, height - 8.5 * mm, document.pickerroy_header)
     canvas.drawRightString(width - 17 * mm, 9 * mm, f"{document.page}")
     canvas.setStrokeColor(LINE)
     canvas.line(17 * mm, 13 * mm, width - 17 * mm, 13 * mm)
@@ -167,6 +167,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("markdown", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--title", default="PickerRoy 使用说明书")
+    parser.add_argument("--subject", default="PickerRoy 0.3.0 安装、使用、个性化学习、导出与排错")
+    parser.add_argument("--header", default="PickerRoy · 本地视频静帧筛选")
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     styles = build_styles()
@@ -177,10 +180,11 @@ def main() -> int:
         leftMargin=18 * mm,
         topMargin=19 * mm,
         bottomMargin=17 * mm,
-        title="PickerRoy 中文使用说明书",
+        title=args.title,
         author="PickerRoy",
-        subject="PickerRoy 0.2.0 安装、使用、训练、导出与排错",
+        subject=args.subject,
     )
+    document.pickerroy_header = args.header
     document.build(parse_markdown(args.markdown.resolve(), styles), onFirstPage=page_decoration, onLaterPages=page_decoration)
     return 0
 

@@ -6,13 +6,16 @@ import logging
 import math
 import os
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 from .models import VideoInfo
+from .control import AnalysisCancelled, AnalysisControl
 from .resources import resource_candidates
 
 LOGGER = logging.getLogger(__name__)
@@ -43,16 +46,65 @@ def resolve_executable(name: str) -> str:
     return name
 
 
-def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(command: list[str], control: AnalysisControl | None = None) -> subprocess.CompletedProcess[str]:
     command = [resolve_executable(command[0]), *command[1:]]
     LOGGER.debug("Running: %s", command)
+    if control:
+        control.checkpoint()
     try:
-        return subprocess.run(command, check=True, capture_output=True, text=True)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        suspended = False
+        while process.poll() is None:
+            if control and control.is_cancelled:
+                if suspended:
+                    _resume_process(process)
+                process.terminate()
+                try:
+                    process.wait(timeout=1.5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1.5)
+                raise AnalysisCancelled()
+            should_pause = bool(control and control.is_paused)
+            if should_pause and not suspended:
+                _suspend_process(process)
+                suspended = True
+            elif not should_pause and suspended:
+                _resume_process(process)
+                suspended = False
+            time.sleep(0.05)
+        stdout, stderr = process.communicate()
+        completed = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        if completed.returncode:
+            raise subprocess.CalledProcessError(completed.returncode, command, stdout, stderr)
+        if control:
+            control.checkpoint()
+        return completed
     except FileNotFoundError as exc:
         raise MediaError(f"找不到视频组件：{Path(command[0]).name}。请在“设置”中查看运行环境自检。") from exc
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip()[-1500:] if exc.stderr else str(exc)
         raise MediaError(f"视频处理失败：{message}") from exc
+
+
+def _suspend_process(process: subprocess.Popen) -> None:
+    if os.name == "posix":
+        os.kill(process.pid, signal.SIGSTOP)
+    elif os.name == "nt":
+        import ctypes
+        result = ctypes.windll.ntdll.NtSuspendProcess(process._handle)  # type: ignore[attr-defined]
+        if result:
+            raise OSError(f"Windows 暂停视频进程失败：{result}")
+
+
+def _resume_process(process: subprocess.Popen) -> None:
+    if os.name == "posix":
+        os.kill(process.pid, signal.SIGCONT)
+    elif os.name == "nt":
+        import ctypes
+        result = ctypes.windll.ntdll.NtResumeProcess(process._handle)  # type: ignore[attr-defined]
+        if result:
+            raise OSError(f"Windows 恢复视频进程失败：{result}")
 
 
 def _fraction(value: str | None) -> float:
@@ -64,11 +116,11 @@ def _fraction(value: str | None) -> float:
     return float(value)
 
 
-def probe_video(path: str | Path) -> VideoInfo:
+def probe_video(path: str | Path, control: AnalysisControl | None = None) -> VideoInfo:
     source = Path(path).expanduser().resolve()
     completed = _run([
         "ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", str(source)
-    ])
+    ], control)
     data = json.loads(completed.stdout)
     video_stream = next((row for row in data.get("streams", []) if row.get("codec_type") == "video"), None)
     if not video_stream:
@@ -98,14 +150,15 @@ def probe_video(path: str | Path) -> VideoInfo:
     )
 
 
-def extract_preview(source: str | Path, timestamp: float, destination: str | Path, width: int = 960) -> Path:
+def extract_preview(source: str | Path, timestamp: float, destination: str | Path, width: int = 960,
+                    control: AnalysisControl | None = None) -> Path:
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     _run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0, timestamp):.6f}",
         "-i", str(source), "-frames:v", "1", "-vf", f"scale='min({width},iw)':-2:flags=lanczos",
         "-q:v", "2", "-y", str(destination),
-    ])
+    ], control)
     if not destination.exists() or destination.stat().st_size == 0:
         raise MediaError(f"无法生成 {timestamp:.3f} 秒处的预览图")
     return destination
@@ -144,7 +197,8 @@ def write_image(path: str | Path, image: np.ndarray) -> Path:
     return destination
 
 
-def estimate_motion(source: str | Path, start: float, end: float, preview_dir: Path) -> float:
+def estimate_motion(source: str | Path, start: float, end: float, preview_dir: Path,
+                    control: AnalysisControl | None = None) -> float:
     duration = max(0.01, end - start)
     margin = min(0.12, duration * 0.08)
     times = np.linspace(start + margin, max(start + margin, end - margin), 4)
@@ -152,7 +206,7 @@ def estimate_motion(source: str | Path, start: float, end: float, preview_dir: P
     for index, timestamp in enumerate(times):
         output = preview_dir / f"motion_{start:.3f}_{index}.jpg"
         try:
-            extract_preview(source, float(timestamp), output, width=320)
+            extract_preview(source, float(timestamp), output, width=320, control=control)
             frame = read_image(output)
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             grays.append(gray)

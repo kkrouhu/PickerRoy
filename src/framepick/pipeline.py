@@ -8,12 +8,13 @@ from pathlib import Path
 
 from .classification import build_classifier, categories_from_observations, face_region_sharpness
 from .config import ASPECT_RATIOS, AnalysisConfig, VIDEO_EXTENSIONS
+from .control import AnalysisCancelled, AnalysisControl
 from .database import FeedbackStore
 from .media import candidate_timestamps, estimate_motion, extract_preview, probe_video, read_image, write_image
 from .models import AnalysisResult, Candidate
 from .popularity import IntrinsicPopularityScorer, apply_popularity_scores
 from .preference import apply_preference_scores, train_preference_model
-from .quality import composition_metrics, perceptual_hash, smart_crop_to_aspect, technical_metrics, temporal_motion_series
+from .quality import aesthetic_metrics, composition_metrics, perceptual_hash, smart_crop_to_aspect, technical_metrics, temporal_motion_series
 from .ranking import apply_temporal_peaks, diversity_rank, mark_duplicates, score_candidates
 from .scene import detect_shots
 
@@ -36,38 +37,43 @@ def discover_videos(inputs: Iterable[str | Path]) -> list[Path]:
 
 class VideoAnalyzer:
     def __init__(self, data_dir: str | Path, config: AnalysisConfig | None = None,
-                 store: FeedbackStore | None = None, classifier=None, popularity_scorer=None):
+                 store: FeedbackStore | None = None, classifier=None, popularity_scorer=None,
+                 control: AnalysisControl | None = None):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config = config or AnalysisConfig()
         self.store = store
         self.classifier = classifier or build_classifier()
         self.popularity_scorer = popularity_scorer or IntrinsicPopularityScorer()
+        self.control = control
 
     def analyze(self, video_path: str | Path, progress: ProgressCallback | None = None) -> AnalysisResult:
         started = time.monotonic()
-        video = probe_video(video_path)
+        self._checkpoint()
+        video = probe_video(video_path, self.control)
         ratio_key = self.config.aspect_ratio.replace(":", "x")
         cache_dir = self.data_dir / "cache" / video.id / ratio_key
         previews = cache_dir / "previews"
         previews.mkdir(parents=True, exist_ok=True)
         self._emit(progress, stage="scene_detection", video=Path(video.path).name, progress=0.02)
-        shots = detect_shots(video, self.config.scene_threshold, self.config.min_scene_seconds)
+        shots = detect_shots(video, self.config.scene_threshold, self.config.min_scene_seconds, self.control)
         all_candidates: list[Candidate] = []
         total_shots = len(shots)
         for shot_number, shot in enumerate(shots, 1):
+            self._checkpoint()
             shot_candidates: list[Candidate] = []
             self._emit(
                 progress, stage="sampling", video=Path(video.path).name, shot=shot_number,
                 shots=total_shots, candidates=len(all_candidates), progress=0.05 + 0.80 * (shot_number - 1) / total_shots,
             )
-            shot.motion = estimate_motion(video.path, shot.start, shot.end, previews)
+            shot.motion = estimate_motion(video.path, shot.start, shot.end, previews, self.control)
             times = candidate_timestamps(
                 shot.start, shot.end, shot.motion,
                 self.config.min_candidates_per_shot, self.config.max_candidates_per_shot,
                 self.config.base_sample_interval, self.config.dynamic_sample_interval,
             )
             for local_index, timestamp in enumerate(times):
+                self._checkpoint()
                 candidate_id = f"{shot.id}-{ratio_key}-f{local_index:04d}"
                 preview_path = previews / f"{candidate_id}.jpg"
                 candidate = Candidate(
@@ -80,7 +86,7 @@ class VideoAnalyzer:
                     aspect_ratio=self.config.aspect_ratio,
                 )
                 try:
-                    extract_preview(video.path, timestamp, preview_path, self.config.preview_width)
+                    extract_preview(video.path, timestamp, preview_path, self.config.preview_width, self.control)
                     image = read_image(preview_path)
                     image, crop_box = smart_crop_to_aspect(image, ASPECT_RATIOS.get(self.config.aspect_ratio))
                     candidate.crop_box = crop_box
@@ -97,6 +103,7 @@ class VideoAnalyzer:
                         observations, face_count = [], 0
                     scores["face_count"] = float(face_count)
                     scores["face_quality"] = face_region_sharpness(image, face_count)
+                    scores.update(aesthetic_metrics(image, face_count))
                     height, width = image.shape[:2]
                     labels, confidence = categories_from_observations(
                         observations, face_count, shot.motion, scores.get("edge_density", 0), width / max(height, 1)
@@ -110,6 +117,8 @@ class VideoAnalyzer:
                     if candidate.rejected and not candidate.reject_reasons:
                         candidate.reject_reasons.append("low_technical_score")
                     candidate.hash64 = perceptual_hash(image)
+                except AnalysisCancelled:
+                    raise
                 except Exception as exc:
                     LOGGER.exception("Candidate failed at %.3fs in %s", timestamp, video.path)
                     candidate.rejected = True
@@ -130,10 +139,12 @@ class VideoAnalyzer:
 
         self._emit(progress, stage="popularity", video=Path(video.path).name, shots=total_shots,
                    candidates=len(all_candidates), progress=0.84)
-        apply_popularity_scores(all_candidates, self.popularity_scorer)
+        self._checkpoint()
+        apply_popularity_scores(all_candidates, self.popularity_scorer, self.control)
         apply_temporal_peaks(all_candidates)
         if self.store:
-            apply_preference_scores(all_candidates, train_preference_model(self.store.preference_pairs()))
+            apply_preference_scores(all_candidates, train_preference_model(self.store.training_pairs()))
+        self._checkpoint()
         self._emit(progress, stage="ranking", video=Path(video.path).name, shots=total_shots,
                    candidates=len(all_candidates), progress=0.90)
         score_candidates(all_candidates, self.config.mode)
@@ -154,6 +165,10 @@ class VideoAnalyzer:
         self._emit(progress, stage="done", video=Path(video.path).name, shots=total_shots,
                    candidates=len(ranked), progress=1.0)
         return result
+
+    def _checkpoint(self) -> None:
+        if self.control:
+            self.control.checkpoint()
 
     @staticmethod
     def _emit(callback: ProgressCallback | None, **payload) -> None:

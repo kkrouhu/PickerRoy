@@ -18,9 +18,9 @@ MODE_CATEGORY_BOOST = {
 }
 
 SOCIAL_POPULARITY_WEIGHT = {
-    "Person": 0.22,
+    "Person": 0.25,
     "Action": 0.16,
-    "Landscape": 0.20,
+    "Landscape": 0.24,
     "Animal": 0.18,
     "Plant": 0.19,
     "Product": 0.18,
@@ -41,9 +41,9 @@ def category_scores(candidate: Candidate, mode: str = "Balanced") -> dict[str, f
     category_confidence = candidate.label_confidence
     social_popularity = s.get("social_popularity", 0.5)
     values = {
-        "Person": 0.28 * technical + 0.23 * face + 0.17 * sharpness + 0.13 * exposure + 0.12 * composition + 0.07 * temporal,
+        "Person": 0.18 * technical + 0.13 * face + 0.11 * sharpness + 0.08 * exposure + 0.10 * composition + 0.07 * temporal + 0.33 * s.get("portrait_aesthetic", 0),
         "Action": 0.23 * technical + 0.17 * sharpness + 0.21 * temporal + 0.18 * motion + 0.13 * composition + 0.08 * exposure,
-        "Landscape": 0.29 * technical + 0.19 * sharpness + 0.21 * composition + 0.19 * exposure + 0.12 * s.get("contrast", 0),
+        "Landscape": 0.18 * technical + 0.11 * sharpness + 0.16 * composition + 0.10 * exposure + 0.08 * s.get("contrast", 0) + 0.37 * s.get("landscape_aesthetic", 0),
         "Animal": 0.27 * technical + 0.20 * sharpness + 0.18 * temporal + 0.15 * composition + 0.12 * exposure + 0.08 * motion,
         "Plant": 0.27 * technical + 0.22 * sharpness + 0.19 * composition + 0.15 * exposure + 0.11 * s.get("contrast", 0) + 0.06 * s.get("edge_density", 0),
         "Product": 0.31 * technical + 0.25 * sharpness + 0.20 * composition + 0.16 * exposure + 0.08 * s.get("contrast", 0),
@@ -71,7 +71,8 @@ def apply_temporal_peaks(candidates: list[Candidate]) -> None:
         items.sort(key=lambda row: row.timestamp)
         base = np.array([
             0.56 * row.scores.get("technical", 0) + 0.24 * row.scores.get("motion", 0) +
-            0.20 * row.scores.get("visual_balance", 0) for row in items
+            0.14 * row.scores.get("visual_balance", 0) + 0.06 * row.scores.get("aesthetic_quality", 0)
+            for row in items
         ])
         if len(base) == 1:
             items[0].scores["temporal_peak"] = 0.5

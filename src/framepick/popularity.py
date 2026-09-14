@@ -10,6 +10,7 @@ import numpy as np
 
 from .models import Candidate
 from .resources import resource_path
+from .control import AnalysisControl
 
 LOGGER = logging.getLogger(__name__)
 
@@ -92,9 +93,12 @@ def normalize_popularity_scores(candidates: list[Candidate]) -> int:
     return len(valid)
 
 
-def apply_popularity_scores(candidates: list[Candidate], scorer: IntrinsicPopularityScorer) -> int:
+def apply_popularity_scores(candidates: list[Candidate], scorer: IntrinsicPopularityScorer,
+                            control: AnalysisControl | None = None) -> int:
     measured = 0
     for item in candidates:
+        if control:
+            control.checkpoint()
         if item.rejected or not Path(item.preview_path).is_file():
             continue
         try:

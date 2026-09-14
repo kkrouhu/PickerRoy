@@ -17,6 +17,15 @@ BASE_FEATURES = (
     "rule_of_thirds",
     "temporal_peak",
     "face_quality",
+    "portrait_aesthetic",
+    "face_composition",
+    "eye_visibility",
+    "expression",
+    "landscape_aesthetic",
+    "color_harmony",
+    "horizon_composition",
+    "depth_layers",
+    "aesthetic_quality",
     "social_popularity",
     "motion",
 )
@@ -84,4 +93,4 @@ def apply_preference_scores(candidates: list[Candidate], model: PreferenceModel 
 def preference_blend_weight(sample_count: float) -> float:
     if sample_count <= 0:
         return 0.0
-    return float(min(0.16, 0.04 + 0.02 * math.log2(sample_count + 1.0)))
+    return float(min(0.34, 0.04 + 0.055 * math.log2(sample_count + 1.0)))

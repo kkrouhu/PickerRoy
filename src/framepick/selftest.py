@@ -25,13 +25,17 @@ def run_self_test(video: str | Path, output_dir: str | Path) -> Path:
     result = VideoAnalyzer(target, AnalysisConfig(max_results_per_video=12), store).analyze(source)
     visible = [item for item in result.candidates if item.rank is not None and not item.rejected and not item.duplicate_of]
     exported = export_candidates(result.video, visible[:1], target / "exports", "PNG") if visible else []
+    optimized = export_candidates(
+        result.video, visible[:1], target / "exports-optimized", "JPEG", optimized=True
+    ) if visible else []
     report = {
-        "success": bool(visible and exported),
+        "success": bool(visible and exported and optimized),
         "video": source.name,
         "shots": len(result.shots),
         "candidates": len(result.candidates),
         "recommended": len(visible),
         "exports": [str(path) for path in exported],
+        "optimized_exports": [str(path) for path in optimized],
         "runtime": [asdict(row) for row in checks],
         "elapsed_seconds": result.elapsed_seconds,
     }
