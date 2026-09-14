@@ -69,7 +69,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force work\ci-self-test
           ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=24:duration=3" -pix_fmt yuv420p work\ci-self-test\input.mp4
-          dist\PickerRoy\PickerRoy.exe --self-test work\ci-self-test\input.mp4 work\ci-self-test\output
+          $process = Start-Process -FilePath "dist\PickerRoy\PickerRoy.exe" -ArgumentList @("--self-test", "work\ci-self-test\input.mp4", "work\ci-self-test\output") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Standalone self-test exited with code $($process.ExitCode)" }
           if (-not (Test-Path work\ci-self-test\output\self-test-report.json)) { throw "Standalone self-test report is missing" }
       - name: 打包 macOS 应用
         if: runner.os == 'macOS'
