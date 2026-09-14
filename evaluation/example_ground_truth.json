@@ -1,0 +1,12 @@
+{
+  "videos": [
+    {
+      "name": "replace-with-private-video",
+      "analysis": "private/data/cache/VIDEO_ID/analysis.json",
+      "targets": [
+        {"timestamp": 1.25, "tolerance_ms": 400}
+      ]
+    }
+  ]
+}
+
