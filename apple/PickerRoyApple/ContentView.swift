@@ -378,12 +378,28 @@ private struct Thumbnail: View {
 
 private struct LogoMark: View {
     let size: CGFloat
-    var body: some View {
-        Image("BrandMark")
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var mark: some View {
+        Image("BrandForeground")
+            .renderingMode(.template)
             .resizable().scaledToFit()
+            .foregroundStyle(.primary)
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.235, style: .continuous))
-            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.235, style: .continuous)
+        if #available(iOS 26.0, macOS 26.0, *), !reduceTransparency {
+            mark.glassEffect(.regular.tint(.white.opacity(colorScheme == .dark ? 0.08 : 0.24)), in: shape)
+                .accessibilityHidden(true)
+        } else {
+            mark.background(Color.platformCard, in: shape)
+                .overlay(shape.strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+                .accessibilityHidden(true)
+        }
     }
 }
 
