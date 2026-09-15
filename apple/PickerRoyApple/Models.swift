@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreMedia
 
 enum OutputAspect: String, CaseIterable, Identifiable, Codable {
     case original = "原视频尺寸"
@@ -66,12 +67,46 @@ struct FrameCandidate: Identifiable, Hashable {
     let videoID: UUID
     let sourceURL: URL
     let time: Double
+    /// The decoded presentation time, including its original time base. A rounded
+    /// request time can point to a different frame when exporting with zero tolerance.
+    let captureTime: CMTime
+    /// Crop selection belongs to the candidate, not the next analysis session.
+    let outputAspect: OutputAspect
     let category: VisualCategory
     let baseScore: Double
     let personalizedScore: Double
     let features: FrameFeatures
     let thumbnailData: Data
     var selected: Bool
+
+    init(
+        id: UUID,
+        videoID: UUID,
+        sourceURL: URL,
+        time: Double,
+        category: VisualCategory,
+        baseScore: Double,
+        personalizedScore: Double,
+        features: FrameFeatures,
+        thumbnailData: Data,
+        selected: Bool,
+        captureTime: CMTime? = nil,
+        outputAspect: OutputAspect = .original
+    ) {
+        self.id = id
+        self.videoID = videoID
+        self.sourceURL = sourceURL
+        let timestamp = captureTime ?? CMTime(seconds: time, preferredTimescale: 600_000)
+        self.captureTime = timestamp
+        self.time = CMTimeGetSeconds(timestamp)
+        self.outputAspect = outputAspect
+        self.category = category
+        self.baseScore = baseScore
+        self.personalizedScore = personalizedScore
+        self.features = features
+        self.thumbnailData = thumbnailData
+        self.selected = selected
+    }
 
     var scoreText: String { String(format: "%.0f", personalizedScore * 100) }
     var timeText: String {

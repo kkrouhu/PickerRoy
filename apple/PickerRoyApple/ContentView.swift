@@ -92,7 +92,7 @@ struct ContentView: View {
                     ForEach(OutputAspect.allCases) { item in Text(item.rawValue).tag(item) }
                 }
                 .labelsHidden()
-                .disabled(model.isAnalyzing)
+                .disabled(model.isBusy)
                 Text("分析前选择，预览和导出使用相同比例")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -104,6 +104,7 @@ struct ContentView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(model.videos) { video in
                         VideoRow(video: video) { model.removeVideo(video.id) }
+                            .disabled(model.isBusy)
                     }
                 }
             }
@@ -113,7 +114,7 @@ struct ContentView: View {
             HStack {
                 Button("开始分析") { model.startAnalysis() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.isAnalyzing || model.videos.isEmpty)
+                    .disabled(model.isBusy || model.videos.isEmpty)
                 if model.isAnalyzing {
                     Button(model.isPaused ? "继续" : "暂停") { model.togglePause() }
                     Button("取消", role: .destructive) { model.cancelAnalysis() }
@@ -222,25 +223,25 @@ struct ContentView: View {
             Button("保存到相册") {
                 model.exportToPhotoLibrary(optimized: false)
             }
-            .disabled(model.selectedCandidates.isEmpty || model.isExporting)
+            .disabled(model.selectedCandidates.isEmpty || model.isBusy)
             Button("优化后存入相册") {
                 model.exportToPhotoLibrary(optimized: true)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.selectedCandidates.isEmpty || model.isExporting)
+            .disabled(model.selectedCandidates.isEmpty || model.isBusy)
             .help("温和提升尺寸、色彩和锐度；不会凭空恢复原视频中不存在的真实细节")
             #else
             Button("直接导出") {
                 optimizedExport = false
                 chooseExportFolder()
             }
-            .disabled(model.selectedCandidates.isEmpty || model.isExporting)
+            .disabled(model.selectedCandidates.isEmpty || model.isBusy)
             Button("优化后导出") {
                 optimizedExport = true
                 chooseExportFolder()
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.selectedCandidates.isEmpty || model.isExporting)
+            .disabled(model.selectedCandidates.isEmpty || model.isBusy)
             .help("温和提升尺寸、色彩和锐度；不会凭空恢复原视频中不存在的真实细节")
             #endif
         }
@@ -333,8 +334,9 @@ private struct CandidateCard: View {
         VStack(spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 Thumbnail(data: frame.thumbnailData)
+                    .scaledToFit()
                     .frame(maxWidth: .infinity)
-                    .aspectRatio(4 / 3, contentMode: .fill)
+                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .clipped()
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onSelect)

@@ -43,8 +43,14 @@ struct AnalysisEngine {
             let second = min(seconds - 0.03, step * Double(index + 1))
             let requested = CMTime(seconds: second, preferredTimescale: 600)
             let frame: CGImage
+            let captureTime: CMTime
             do {
-                frame = try await generator.image(at: requested).image
+                let generated = try await generator.image(at: requested)
+                guard generated.actualTime.isNumeric else {
+                    throw NSError(domain: "PickerRoy", code: 6, userInfo: [NSLocalizedDescriptionKey: "无法读取画面的准确时间"])
+                }
+                frame = generated.image
+                captureTime = generated.actualTime
             } catch {
                 if firstFrameError == nil { firstFrameError = error }
                 progress(Double(index + 1) / Double(sampleCount))
@@ -61,13 +67,15 @@ struct AnalysisEngine {
                     id: UUID(),
                     videoID: video.id,
                     sourceURL: video.url,
-                    time: second,
+                    time: CMTimeGetSeconds(captureTime),
                     category: evaluation.category,
                     baseScore: base,
                     personalizedScore: final,
                     features: evaluation.features,
                     thumbnailData: preview,
-                    selected: false
+                    selected: false,
+                    captureTime: captureTime,
+                    outputAspect: aspect
                 ))
             }
             progress(Double(index + 1) / Double(sampleCount))
@@ -85,11 +93,13 @@ struct AnalysisEngine {
         return diverseTopFrames(from: scored, duration: seconds)
     }
 
+    // Keep the external aspect label for existing callers; the analyzed crop is
+    // authoritative so changing the controls cannot change already chosen images.
     func export(
         _ candidates: [FrameCandidate],
         to folder: URL,
         optimized: Bool,
-        aspect: OutputAspect,
+        aspect _: OutputAspect,
         control: AnalysisControl,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
@@ -107,9 +117,16 @@ struct AnalysisEngine {
                 generator.appliesPreferredTrackTransform = true
                 generator.requestedTimeToleranceBefore = .zero
                 generator.requestedTimeToleranceAfter = .zero
-                let time = CMTime(seconds: candidate.time, preferredTimescale: 600)
-                let frame = try await generator.image(at: time).image
-                guard let cropped = crop(frame, to: aspect.ratio) else {
+                let generated = try await generator.image(at: candidate.captureTime)
+                guard generated.actualTime.isNumeric,
+                      CMTimeCompare(generated.actualTime, candidate.captureTime) == 0 else {
+                    throw NSError(
+                        domain: "PickerRoy",
+                        code: 6,
+                        userInfo: [NSLocalizedDescriptionKey: "无法准确还原已选画面，请重新分析源视频后再导出"]
+                    )
+                }
+                guard let cropped = crop(generated.image, to: candidate.outputAspect.ratio) else {
                     throw NSError(
                         domain: "PickerRoy",
                         code: 5,
@@ -118,11 +135,11 @@ struct AnalysisEngine {
                 }
 
                 let finalImage = optimized ? optimize(cropped) : cropped
-                let sourceName = candidate.sourceURL.deletingPathExtension().lastPathComponent
-                    .replacingOccurrences(of: "/", with: "-")
+                let sourceName = exportSourceName(candidate.sourceURL)
+                let sourceID = candidate.videoID.uuidString.prefix(12).lowercased()
                 let suffix = String(format: "%06d", Int(candidate.time * 1000))
                 let ext = optimized ? "jpg" : "png"
-                let destination = folder.appendingPathComponent("\(sourceName)-\(suffix)-\(candidate.category.rawValue).\(ext)")
+                let destination = folder.appendingPathComponent("\(sourceName)-\(sourceID)-\(suffix)-\(candidate.category.rawValue).\(ext)")
                 try write(finalImage, to: destination, jpeg: optimized)
             }
             progress(Double(index + 1) / Double(max(1, candidates.count)))
@@ -303,9 +320,24 @@ struct AnalysisEngine {
         return context.createCGImage(current, from: current.extent) ?? image
     }
 
+    private func exportSourceName(_ url: URL) -> String {
+        // Leave space for IDs, timestamps and collision suffixes even for long
+        // multibyte filenames. Do not copy path separators/control characters.
+        let original = url.deletingPathExtension().lastPathComponent
+        var name = ""
+        for scalar in original.unicodeScalars {
+            let part = CharacterSet.controlCharacters.contains(scalar) || "/\\:".unicodeScalars.contains(scalar)
+                ? "-" : String(scalar)
+            guard name.utf8.count + part.utf8.count <= 120 else { break }
+            name.append(part)
+        }
+        return name.isEmpty ? "PickerRoy" : name
+    }
+
     private func write(_ image: CGImage, to url: URL, jpeg: Bool) throws {
         let type = jpeg ? UTType.jpeg.identifier : UTType.png.identifier
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type as CFString, 1, nil) else {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, type as CFString, 1, nil) else {
             throw NSError(domain: "PickerRoy", code: 2, userInfo: [NSLocalizedDescriptionKey: "无法建立导出文件"])
         }
         let options: CFDictionary = jpeg
@@ -314,6 +346,21 @@ struct AnalysisEngine {
         CGImageDestinationAddImage(destination, image, options)
         guard CGImageDestinationFinalize(destination) else {
             throw NSError(domain: "PickerRoy", code: 3, userInfo: [NSLocalizedDescriptionKey: "图片写入失败"])
+        }
+
+        // Exclusive creation protects both previous exports and unrelated files,
+        // including when two export tasks happen to choose the same name.
+        let encoded = data as Data
+        var attempt = 1
+        while true {
+            let destinationURL = attempt == 1 ? url : url.deletingPathExtension()
+                .appendingPathExtension("\(attempt).\(url.pathExtension)")
+            do {
+                try encoded.write(to: destinationURL, options: .withoutOverwriting)
+                return
+            } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError {
+                attempt += 1
+            }
         }
     }
 }

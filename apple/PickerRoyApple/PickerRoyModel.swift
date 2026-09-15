@@ -17,13 +17,16 @@ final class PickerRoyModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var profile: PreferenceProfile
 
-    private let store = PreferenceStore()
+    private let store: PreferenceStore
     private let accessPolicy: FeatureAccessPolicy
-    private var task: Task<Void, Never>?
+    private var analysisTask: Task<Void, Never>?
+    private var exportTask: Task<Void, Never>?
+    private var operationID = UUID()
     private var control: AnalysisControl?
 
-    init(accessPolicy: FeatureAccessPolicy = .v1Free) {
+    init(accessPolicy: FeatureAccessPolicy = .v1Free, store: PreferenceStore = PreferenceStore()) {
         self.accessPolicy = accessPolicy
+        self.store = store
         profile = store.load()
         #if DEBUG
         if let demoPath = ProcessInfo.processInfo.environment["PICKERROY_DEMO_VIDEO"],
@@ -41,14 +44,15 @@ final class PickerRoyModel: ObservableObject {
     }
 
     var selectedCandidates: [FrameCandidate] { candidates.filter(\.selected) }
+    var isBusy: Bool { isAnalyzing || isExporting }
 
     func canUse(_ feature: PickerRoyFeature) -> Bool {
         accessPolicy.allows(feature)
     }
 
     func addVideos(_ urls: [URL]) {
-        let existing = Set(videos.map { $0.url.standardizedFileURL })
-        let newURLs = urls.filter { !existing.contains($0.standardizedFileURL) }
+        var existing = Set(videos.map { $0.url.standardizedFileURL })
+        let newURLs = urls.filter { existing.insert($0.standardizedFileURL).inserted }
         videos.append(contentsOf: newURLs.map { VideoItem(url: $0) })
         if newURLs.isEmpty {
             statusMessage = urls.isEmpty ? "没有选择视频" : "这些视频已经在列表中"
@@ -60,7 +64,7 @@ final class PickerRoyModel: ObservableObject {
     }
 
     func removeVideo(_ id: UUID) {
-        guard !isAnalyzing else { return }
+        guard !isBusy else { return }
         videos.removeAll { $0.id == id }
         candidates.removeAll { $0.videoID == id }
         statusMessage = videos.isEmpty ? "请选择视频开始" : importedSummary
@@ -68,7 +72,7 @@ final class PickerRoyModel: ObservableObject {
 
     func startAnalysis() {
         guard canUse(.analysis) else { return }
-        guard !isAnalyzing else { return }
+        guard !isBusy else { return }
         let batch = videos.filter { $0.state != .completed }
         guard !batch.isEmpty else {
             statusMessage = videos.isEmpty ? "请先导入视频" : "所有视频都已分析完成"
@@ -83,8 +87,10 @@ final class PickerRoyModel: ObservableObject {
         errorMessage = nil
         let selectedAspect = aspect
         let currentProfile = profile
+        let runID = UUID()
+        operationID = runID
 
-        task = Task { [weak self] in
+        analysisTask = Task { [weak self] in
             guard let self else { return }
             var finished = 0
             for item in batch {
@@ -96,7 +102,8 @@ final class PickerRoyModel: ObservableObject {
                     let batchCount = batch.count
                     let progressHandler: @Sendable (Double) -> Void = { [weak self] value in
                         Task { @MainActor in
-                            self?.progress = (Double(finishedCount) + value) / Double(batchCount)
+                            guard let self, self.operationID == runID, self.isAnalyzing else { return }
+                            self.progress = (Double(finishedCount) + value) / Double(batchCount)
                         }
                     }
                     let result = try await Task.detached(priority: .userInitiated) {
@@ -135,6 +142,7 @@ final class PickerRoyModel: ObservableObject {
             self.isAnalyzing = false
             self.isPaused = false
             self.control = nil
+            self.analysisTask = nil
             self.statusMessage = Task.isCancelled || finished < batch.count
                 ? "分析已停止；已完成的结果已保留"
                 : "分析完成：共生成 \(self.candidates.count) 张候选画面"
@@ -157,11 +165,12 @@ final class PickerRoyModel: ObservableObject {
     func cancelAnalysis() {
         guard isAnalyzing else { return }
         control?.cancel()
-        task?.cancel()
+        analysisTask?.cancel()
         statusMessage = "正在安全停止……"
     }
 
     func toggleSelection(_ id: UUID) {
+        guard !isExporting else { return }
         guard let index = candidates.firstIndex(where: { $0.id == id }) else { return }
         candidates[index].selected.toggle()
     }
@@ -182,8 +191,9 @@ final class PickerRoyModel: ObservableObject {
 
     func export(to folder: URL, optimized: Bool) {
         guard canUse(optimized ? .optimizedExport : .directExport) else { return }
+        guard !isBusy else { return }
         let selected = selectedCandidates
-        guard !selected.isEmpty, !isExporting else {
+        guard !selected.isEmpty else {
             statusMessage = "请先选择要导出的图片"
             return
         }
@@ -192,11 +202,16 @@ final class PickerRoyModel: ObservableObject {
         statusMessage = optimized ? "正在优化并导出……" : "正在导出原始截图……"
         let exportControl = AnalysisControl()
         let selectedAspect = aspect
-        task = Task { [weak self] in
+        let runID = UUID()
+        operationID = runID
+        exportTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let progressHandler: @Sendable (Double) -> Void = { [weak self] value in
-                    Task { @MainActor in self?.progress = value }
+                    Task { @MainActor in
+                        guard let self, self.operationID == runID, self.isExporting else { return }
+                        self.progress = value
+                    }
                 }
                 try await Task.detached(priority: .userInitiated) {
                     try await AnalysisEngine().export(
@@ -213,14 +228,16 @@ final class PickerRoyModel: ObservableObject {
                 self.statusMessage = "导出失败"
             }
             self.isExporting = false
+            self.exportTask = nil
         }
     }
 
     #if os(iOS)
     func exportToPhotoLibrary(optimized: Bool) {
         guard canUse(optimized ? .optimizedExport : .directExport) else { return }
+        guard !isBusy else { return }
         let selected = selectedCandidates
-        guard !selected.isEmpty, !isExporting else {
+        guard !selected.isEmpty else {
             statusMessage = "请先选择要保存的图片"
             return
         }
@@ -230,7 +247,9 @@ final class PickerRoyModel: ObservableObject {
         statusMessage = optimized ? "正在优化并保存到相册……" : "正在保存到相册……"
         let exportControl = AnalysisControl()
         let selectedAspect = aspect
-        task = Task { [weak self] in
+        let runID = UUID()
+        operationID = runID
+        exportTask = Task { [weak self] in
             guard let self else { return }
             let temporaryFolder = FileManager.default.temporaryDirectory
                 .appendingPathComponent("PickerRoy-Photo-Export-\(UUID().uuidString)", isDirectory: true)
@@ -238,7 +257,10 @@ final class PickerRoyModel: ObservableObject {
 
             do {
                 let progressHandler: @Sendable (Double) -> Void = { [weak self] value in
-                    Task { @MainActor in self?.progress = value * 0.82 }
+                    Task { @MainActor in
+                        guard let self, self.operationID == runID, self.isExporting else { return }
+                        self.progress = value * 0.82
+                    }
                 }
                 try await Task.detached(priority: .userInitiated) {
                     try await AnalysisEngine().export(
@@ -288,6 +310,7 @@ final class PickerRoyModel: ObservableObject {
                 self.statusMessage = "保存失败"
             }
             self.isExporting = false
+            self.exportTask = nil
         }
     }
     #endif

@@ -21,3 +21,21 @@
 - 最终源文件重新构建：Mac/iPhone Release 无签名构建通过，34 项本机测试通过（包括 Apple Vision 和两项图标完整性测试）。限制沙箱中 Vision 无法创建系统图像缓冲区；在本机正常权限下复测通过，没有为此放宽或跳过测试。/ Final Mac/iPhone unsigned Release builds and all 34 local tests passed, including Apple Vision and two icon integrity checks. Vision could not allocate a system image buffer in the restricted sandbox, then passed with normal local permissions; no test was weakened or skipped for that failure.
 
 本次品牌更新尚不在 v0.3.4 ZIP 中。源文件与复现方法见 `scripts/brand/README.md`。/ These brand changes are not in v0.3.4 downloads. See `scripts/brand/README.md` for sources and reproduction.
+
+## 原生截图一致性与文件保护 / Native frame fidelity and file protection
+
+- 候选保留解码器返回的精确画面时间和分析时画幅。导出同一帧、同一裁切，之后改变画幅只影响新分析；无法精确还原时明确报错。/ Each candidate retains its decoded presentation time and analysis crop. Export reuses both, independent of later settings, and reports an error if that exact frame cannot be recovered.
+- 同名视频增加来源标识；已存在的文件绝不覆盖，重复导出递增文件名。/ Source identifiers distinguish same-name videos. Exclusive writes and collision suffixes preserve existing exports and unrelated files.
+- 分析和导出互斥，任务句柄分离；忙碌时锁定移除操作，导出时锁定勾选；迟到进度按操作标识过滤。单批次重复导入也会去重。/ Analysis and export are mutually exclusive with separate task handles. Removal is blocked while busy, selection is frozen during export, and operation IDs filter stale progress. Duplicate URLs within an import batch are also removed.
+- 网格缩略图等比显示，不将不同画幅拉伸到统一比例。/ Grid thumbnails fit proportionally instead of stretching different crops to one ratio.
+
+2026-09-15 验证：Mac/iPhone Release 无签名构建通过；合成 29.97 fps 视频的 5 组引擎检查通过（精确时间、画幅、同名与重复导出、并发防覆盖、优化 JPEG）；隔离偏好目录的 9 组模型 smoke 检查通过。合成检查不证明真实审美准确率，模型 smoke 不覆盖迟到回调或相册权限；界面与真机验收仍待完成。/ Validation: both unsigned Release builds passed, as did five generated-media engine checks and nine isolated model smoke groups. Synthetic checks do not measure aesthetic accuracy. Model smoke does not cover late callbacks or Photos authorization; UI and physical-device acceptance remain pending.
+
+复现 / Reproduce:
+
+```sh
+bash scripts/check_native_export_fidelity.sh
+bash scripts/apple-model-smoke/run.sh
+```
+
+系统媒体服务检查需要正常本机编解码权限；测试只使用合成数据，不访问用户视频或偏好。以上改动不在 v0.3.4 安装包中；原生“再筛一次”仍待接入，不能把已存在于旧原型的功能当成本工程已完成。/ Media checks require normal local codec access and use generated data only. These changes are not in v0.3.4 packages. Native “Select again” integration remains pending; the older prototype's implementation is not a completed feature in this target.

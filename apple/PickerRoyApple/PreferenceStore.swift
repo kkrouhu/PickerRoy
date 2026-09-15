@@ -3,12 +3,16 @@ import Foundation
 final class PreferenceStore {
     private let fileURL: URL
 
-    init() {
+    init(fileURL: URL? = nil) {
+        if let fileURL {
+            self.fileURL = fileURL
+            return
+        }
         let manager = FileManager.default
         let root = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("PickerRoy", isDirectory: true)
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
-        fileURL = root.appendingPathComponent("preference-profile.json")
+        self.fileURL = root.appendingPathComponent("preference-profile.json")
     }
 
     func load() -> PreferenceProfile {
