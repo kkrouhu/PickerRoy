@@ -1,6 +1,6 @@
 # PickerRoy English User Manual
 
-Version 0.3.1 · macOS and Windows · September 2026
+Version 0.3.2 · macOS and Windows · September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
@@ -31,7 +31,7 @@ PickerRoy does not impose one fixed taste. Outdoor, urban advertising, indoor po
 | Apple Silicon Mac (M1/M2/M3/M4 and later) | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | 64-bit Windows 10/11 | `PickerRoy-Windows-x64.zip` |
-| Optional Codex assistance | `PickerRoy-Codex-Skill-v0.3.1.zip` |
+| Optional Codex assistance | `PickerRoy-Codex-Skill-v0.3.2.zip` |
 
 The App and the Skill are different. The App is the product an ordinary user opens. The Skill is a compact professional guide that helps Codex install, diagnose, summarize preferences privately, modify source code, test, and rebuild. Normal app use never requires Codex.
 

@@ -1,6 +1,6 @@
 # PickerRoy 中英双语使用说明书
 
-版本 / Version 0.3.1 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
+版本 / Version 0.3.2 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
@@ -27,7 +27,7 @@ PickerRoy 不把一种固定审美强加给所有人。收藏、保留、淘汰�
 | Apple 芯片 Mac / Apple Silicon Mac | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | Windows 10/11 x64 | `PickerRoy-Windows-x64.zip` |
-| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.1.zip` |
+| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.2.zip` |
 
 macOS：解压，把 App 拖入“应用程序”。如首次被拦截，Control 点击 App，选择“打开”。不要全局关闭 Gatekeeper。/ macOS: unzip, move the App to Applications, and open it. If blocked on first launch, Control-click and choose Open. Do not disable Gatekeeper globally.
 

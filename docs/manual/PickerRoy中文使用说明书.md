@@ -1,6 +1,6 @@
 # PickerRoy 中文使用说明书
 
-版本 0.3.1 · Mac 与 Windows · 2026 年 9 月
+版本 0.3.2 · Mac 与 Windows · 2026 年 9 月
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
