@@ -168,7 +168,7 @@ def main() -> int:
     parser.add_argument("markdown", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--title", default="PickerRoy 使用说明书")
-    parser.add_argument("--subject", default="PickerRoy 0.3.3 安装、使用、个性化学习、导出与排错")
+    parser.add_argument("--subject", default="PickerRoy 0.3.4 安装、使用、个性化学习、导出与排错")
     parser.add_argument("--header", default="PickerRoy · 本地视频静帧筛选")
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)

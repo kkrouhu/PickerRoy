@@ -1,6 +1,6 @@
 # PickerRoy 中文使用说明书
 
-版本 0.3.3 · Mac 与 Windows · 2026 年 9 月
+版本 0.3.4 · Mac 与 Windows · 2026 年 9 月
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
@@ -253,7 +253,7 @@ Rec.709 视频按 FFmpeg 解码结果导出。检测到 HDR/BT.2020 时，Picker
 
 ## 十四、实测结果与边界
 
-v0.3.3：29 项 Python 自动测试通过；Apple 芯片 Mac 独立包完成分析及直接 PNG、优化 JPEG 导出，实际后端为 Apple Vision。Mac 应用版本信息与临时签名完整性验证通过，但尚未获得 Developer ID 公证。详见仓库中的 v0.3.3 验证记录。
+v0.3.4：31 项 Python 自动测试通过；Apple 芯片 Mac 独立包完成分析及直接 PNG、优化 JPEG 导出，实际后端为 Apple Vision。Mac 应用版本信息与临时签名完整性验证通过，但尚未获得 Developer ID 公证。详见仓库中的 v0.3.4 验证记录。
 
 以下为 v0.3.0 的历史工程基线，不代表本次新增准确率结果：
 

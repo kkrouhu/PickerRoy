@@ -1,16 +1,16 @@
 # PickerRoy
 
-## v0.3.3 · 从视频中精选好照片 / Select great photos from video
+## v0.3.4 · 从视频中精选好照片 / Select great photos from video
 
 快速筛选清晰、自然、适合使用的画面，保存到本地。视频与偏好数据在你的设备上处理。/ Quickly shortlist clear, natural, useful frames and save them locally. Video processing and preferences stay on your device.
 
 本版更新了白底 ROY 光圈标志、产品文案、应用版本信息与三份使用说明书，保留现有筛选与偏好学习能力；没有宣称新的准确率提升。/ This release refreshes the white ROY aperture identity, product messaging, application version metadata, and all three manuals. Existing selection and preference-learning features are preserved; no new accuracy improvement is claimed.
 
-[中英双语更新说明 / Bilingual release notes](docs/RELEASE_NOTES_v0.3.3.md) · [版本下载 / Downloads](https://github.com/kkrouhu/PickerRoy/releases/tag/v0.3.3) · [中英双语说明书 / Bilingual manual](docs/manual/PickerRoy中英双语使用说明书.pdf)
+[中英双语更新说明 / Bilingual release notes](docs/RELEASE_NOTES_v0.3.4.md) · [版本下载 / Downloads](https://github.com/kkrouhu/PickerRoy/releases/tag/v0.3.4) · [中英双语说明书 / Bilingual manual](docs/manual/PickerRoy中英双语使用说明书.pdf)
 
 同时修复了新 macOS 下 Apple Vision 参数桥接异常导致的识别降级，并让自检记录真实分类后端。/ Also fixes an Apple Vision options-bridging error on newer macOS and records the actual classification backend in smoke-test reports.
 
-![PickerRoy v0.3.3 桌面界面 / Desktop interface](docs/GUI_IMPORT_v0.3.3.png)
+![PickerRoy v0.3.4 桌面界面 / Desktop interface](docs/GUI_IMPORT_v0.3.4.png)
 
 PickerRoy 是一款完全在本机运行的视频静帧智能筛选工具，面向摄影师和内容创作者。它不会简单地每隔几秒截图，而是先识别镜头，再结合技术质量、内容类型、社交媒体热门视觉模型和你的本机偏好，挑选清晰、有代表性且彼此不同的瞬间。
 

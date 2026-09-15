@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pickerroy"
-version = "0.3.3"
+version = "0.3.4"
 description = "本地运行的视频静帧智能筛选工具"
 readme = "README.md"
 requires-python = ">=3.10"

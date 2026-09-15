@@ -1,6 +1,6 @@
 # PickerRoy 中英双语使用说明书
 
-版本 / Version 0.3.3 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
+版本 / Version 0.3.4 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
@@ -41,7 +41,7 @@ PickerRoy 不把一种固定审美强加给所有人。收藏、保留、淘汰�
 | Apple 芯片 Mac / Apple Silicon Mac | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | Windows 10/11 x64 | `PickerRoy-Windows-x64.zip` |
-| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.3.zip` |
+| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.4.zip` |
 
 macOS：解压，把 App 拖入“应用程序”。本包尚未公证；如无法验证开发者，先核验来源和校验和，确认可信后查看“系统设置 → 隐私与安全性”中本应用的“仍要打开”。如提示损坏或恶意软件，停止并反馈。不要关闭系统保护。/ macOS: unzip and move the app to Applications. This build is not notarized. If the developer cannot be verified, verify the source and checksum before reviewing the app-specific Open Anyway option in System Settings → Privacy & Security. Stop and report any damage or malware warning. Do not disable system protections.
 

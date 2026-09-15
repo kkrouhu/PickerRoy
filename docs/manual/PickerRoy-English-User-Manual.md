@@ -1,12 +1,12 @@
 # PickerRoy English User Manual
 
-Version 0.3.3 · macOS and Windows · September 2026
+Version 0.3.4 · macOS and Windows · September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
 Select great photos from video. Quickly shortlist clear, natural, useful frames and save them locally.
 
-New in v0.3.3: a white ROY aperture identity, refreshed desktop branding and headline, corrected application version metadata, and updated bilingual release materials. Selection algorithms and local preference learning are unchanged; no increased accuracy or speed is claimed.
+New in v0.3.4: a white ROY aperture identity, refreshed desktop branding and headline, corrected application version metadata, and updated bilingual release materials. Selection algorithms and local preference learning are unchanged; no increased accuracy or speed is claimed.
 
 This version also fixes an Apple Vision options-bridging error on newer macOS that could force classification to fall back. Standalone smoke tests now record the backend used after analysis. The planned store rollout is Mac App Store first, then iPhone; this GitHub test package does not mean either store release is live.
 
@@ -37,7 +37,7 @@ PickerRoy does not impose one fixed taste. Outdoor, urban advertising, indoor po
 | Apple Silicon Mac (M1/M2/M3/M4 and later) | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | 64-bit Windows 10/11 | `PickerRoy-Windows-x64.zip` |
-| Optional Codex assistance | `PickerRoy-Codex-Skill-v0.3.3.zip` |
+| Optional Codex assistance | `PickerRoy-Codex-Skill-v0.3.4.zip` |
 
 The App and the Skill are different. The App is the product an ordinary user opens. The Skill is a compact professional guide that helps Codex install, diagnose, summarize preferences privately, modify source code, test, and rebuild. Normal app use never requires Codex.
 
