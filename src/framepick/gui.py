@@ -363,8 +363,7 @@ class MainWindow(QMainWindow):
             button.setObjectName("sideButton")
             button.setCheckable(True)
             button.setProperty("page", index)
-            button.clicked.connect(lambda _checked=False, page=index: self.pages.setCurrentIndex(page))
-            self.nav_group.addButton(button)
+            self.nav_group.addButton(button, index)
             side_layout.addWidget(button)
             if index == 0:
                 button.setChecked(True)
@@ -379,8 +378,21 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self._results_page())
         self.pages.addWidget(self._preference_page())
         self.pages.addWidget(self._settings_page())
+        # Accessibility activation can change checked state without clicked().
+        # Connect after page construction, since the first button starts checked.
+        self.nav_group.idToggled.connect(self._navigate_checked_page)
+        self.pages.currentChanged.connect(self._sync_navigation)
         outer.addWidget(sidebar)
         outer.addWidget(self.pages, 1)
+
+    def _navigate_checked_page(self, page: int, checked: bool) -> None:
+        if checked:
+            self.pages.setCurrentIndex(page)
+
+    def _sync_navigation(self, page: int) -> None:
+        button = self.nav_group.button(page)
+        if button is not None and not button.isChecked():
+            button.setChecked(True)
 
     def _page_shell(self, title: str, subtitle: str) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
