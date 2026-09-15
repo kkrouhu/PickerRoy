@@ -16,6 +16,7 @@
 		AA0000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000008 /* Assets.xcassets */; };
 		AA0000000000000000000009 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000009 /* PrivacyInfo.xcprivacy */; };
 		AA000000000000000000000D /* FeatureAccessPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000D /* FeatureAccessPolicy.swift */; };
+		AA000000000000000000000E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000E /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 		AB000000000000000000000B /* PickerRoy.iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickerRoy.iOS.entitlements; sourceTree = "<group>"; };
 		AB000000000000000000000C /* PickerRoy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PickerRoy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB000000000000000000000D /* FeatureAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureAccessPolicy.swift; sourceTree = "<group>"; };
+		AB000000000000000000000E /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +66,7 @@
 				AB0000000000000000000007 /* ContentView.swift */,
 				AB000000000000000000000D /* FeatureAccessPolicy.swift */,
 				AB0000000000000000000008 /* Assets.xcassets */,
+				AB000000000000000000000E /* AppIcon.icon */,
 				AB0000000000000000000009 /* PrivacyInfo.xcprivacy */,
 				AB000000000000000000000A /* PickerRoy.macOS.entitlements */,
 				AB000000000000000000000B /* PickerRoy.iOS.entitlements */,
@@ -125,6 +128,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000008 /* Assets.xcassets in Resources */,
+				AA000000000000000000000E /* AppIcon.icon in Resources */,
 				AA0000000000000000000009 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
