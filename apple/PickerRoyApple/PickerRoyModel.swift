@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if os(iOS)
+import Photos
+#endif
 
 @MainActor
 final class PickerRoyModel: ObservableObject {
@@ -15,10 +18,12 @@ final class PickerRoyModel: ObservableObject {
     @Published private(set) var profile: PreferenceProfile
 
     private let store = PreferenceStore()
+    private let accessPolicy: FeatureAccessPolicy
     private var task: Task<Void, Never>?
     private var control: AnalysisControl?
 
-    init() {
+    init(accessPolicy: FeatureAccessPolicy = .v1Free) {
+        self.accessPolicy = accessPolicy
         profile = store.load()
         #if DEBUG
         if let demoPath = ProcessInfo.processInfo.environment["PICKERROY_DEMO_VIDEO"],
@@ -36,6 +41,10 @@ final class PickerRoyModel: ObservableObject {
     }
 
     var selectedCandidates: [FrameCandidate] { candidates.filter(\.selected) }
+
+    func canUse(_ feature: PickerRoyFeature) -> Bool {
+        accessPolicy.allows(feature)
+    }
 
     func addVideos(_ urls: [URL]) {
         let existing = Set(videos.map { $0.url.standardizedFileURL })
@@ -58,6 +67,7 @@ final class PickerRoyModel: ObservableObject {
     }
 
     func startAnalysis() {
+        guard canUse(.analysis) else { return }
         guard !isAnalyzing else { return }
         let batch = videos.filter { $0.state != .completed }
         guard !batch.isEmpty else {
@@ -82,18 +92,20 @@ final class PickerRoyModel: ObservableObject {
                 self.setState(.analyzing, for: item.id)
                 self.statusMessage = "正在分析：\(item.name)"
                 do {
+                    let finishedCount = finished
+                    let batchCount = batch.count
+                    let progressHandler: @Sendable (Double) -> Void = { [weak self] value in
+                        Task { @MainActor in
+                            self?.progress = (Double(finishedCount) + value) / Double(batchCount)
+                        }
+                    }
                     let result = try await Task.detached(priority: .userInitiated) {
                         try await AnalysisEngine().analyze(
                             video: item,
                             aspect: selectedAspect,
                             profile: currentProfile,
                             control: runControl
-                        ) { value in
-                            Task { @MainActor [weak self] in
-                                guard let self else { return }
-                                self.progress = (Double(finished) + value) / Double(batch.count)
-                            }
-                        }
+                        ) { value in progressHandler(value) }
                     }.value
 
                     let autoSelectCount = min(8, max(1, result.count / 3))
@@ -155,6 +167,7 @@ final class PickerRoyModel: ObservableObject {
     }
 
     func learn(_ id: UUID, liked: Bool) {
+        guard canUse(.personalization) else { return }
         guard let frame = candidates.first(where: { $0.id == id }) else { return }
         profile.learn(features: frame.features, liked: liked)
         store.save(profile)
@@ -168,6 +181,7 @@ final class PickerRoyModel: ObservableObject {
     }
 
     func export(to folder: URL, optimized: Bool) {
+        guard canUse(optimized ? .optimizedExport : .directExport) else { return }
         let selected = selectedCandidates
         guard !selected.isEmpty, !isExporting else {
             statusMessage = "请先选择要导出的图片"
@@ -181,6 +195,9 @@ final class PickerRoyModel: ObservableObject {
         task = Task { [weak self] in
             guard let self else { return }
             do {
+                let progressHandler: @Sendable (Double) -> Void = { [weak self] value in
+                    Task { @MainActor in self?.progress = value }
+                }
                 try await Task.detached(priority: .userInitiated) {
                     try AnalysisEngine().export(
                         selected,
@@ -188,9 +205,7 @@ final class PickerRoyModel: ObservableObject {
                         optimized: optimized,
                         aspect: selectedAspect,
                         control: exportControl
-                    ) { value in
-                        Task { @MainActor [weak self] in self?.progress = value }
-                    }
+                    ) { value in progressHandler(value) }
                 }.value
                 self.statusMessage = "导出完成：\(selected.count) 张图片"
             } catch {
@@ -200,6 +215,82 @@ final class PickerRoyModel: ObservableObject {
             self.isExporting = false
         }
     }
+
+    #if os(iOS)
+    func exportToPhotoLibrary(optimized: Bool) {
+        guard canUse(optimized ? .optimizedExport : .directExport) else { return }
+        let selected = selectedCandidates
+        guard !selected.isEmpty, !isExporting else {
+            statusMessage = "请先选择要保存的图片"
+            return
+        }
+
+        isExporting = true
+        progress = 0
+        statusMessage = optimized ? "正在优化并保存到相册……" : "正在保存到相册……"
+        let exportControl = AnalysisControl()
+        let selectedAspect = aspect
+        task = Task { [weak self] in
+            guard let self else { return }
+            let temporaryFolder = FileManager.default.temporaryDirectory
+                .appendingPathComponent("PickerRoy-Photo-Export-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: temporaryFolder) }
+
+            do {
+                let progressHandler: @Sendable (Double) -> Void = { [weak self] value in
+                    Task { @MainActor in self?.progress = value * 0.82 }
+                }
+                try await Task.detached(priority: .userInitiated) {
+                    try AnalysisEngine().export(
+                        selected,
+                        to: temporaryFolder,
+                        optimized: optimized,
+                        aspect: selectedAspect,
+                        control: exportControl
+                    ) { value in progressHandler(value) }
+                }.value
+
+                let authorization = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+                guard authorization == .authorized || authorization == .limited else {
+                    throw NSError(
+                        domain: "PickerRoy",
+                        code: 20,
+                        userInfo: [NSLocalizedDescriptionKey: "需要允许 PickerRoy 添加照片，才能保存到系统相册"]
+                    )
+                }
+
+                let imageURLs = try FileManager.default.contentsOfDirectory(
+                    at: temporaryFolder,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles]
+                )
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    PHPhotoLibrary.shared().performChanges {
+                        for url in imageURLs {
+                            PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)
+                        }
+                    } completionHandler: { success, error in
+                        if success {
+                            continuation.resume()
+                        } else {
+                            continuation.resume(throwing: error ?? NSError(
+                                domain: "PickerRoy",
+                                code: 21,
+                                userInfo: [NSLocalizedDescriptionKey: "系统相册保存失败"]
+                            ))
+                        }
+                    }
+                }
+                self.progress = 1
+                self.statusMessage = "已保存到相册：\(imageURLs.count) 张图片"
+            } catch {
+                self.errorMessage = error.localizedDescription
+                self.statusMessage = "保存失败"
+            }
+            self.isExporting = false
+        }
+    }
+    #endif
 
     private func setState(_ state: VideoState, for id: UUID, count: Int = 0, error: String? = nil) {
         guard let index = videos.firstIndex(where: { $0.id == id }) else { return }

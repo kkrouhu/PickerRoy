@@ -1,4 +1,7 @@
 .DS_Store
+xcuserdata/
+*.xcuserstate
+*.xcodeproj/project.xcworkspace/
 .venv/
 __pycache__/
 *.py[cod]
@@ -19,6 +22,8 @@ logs/
 *.sqlite3
 evaluation/private/
 examples/private/
+tmp/
+docs/app-store/design/source/real-*.jpg
 *.mp4
 *.mov
 *.mxf

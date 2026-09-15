@@ -13,11 +13,11 @@ PickerRoy 同时在 iPhone/iPad App Store 与 Mac App Store 提供下载。视�
 | Apple Developer Program | 中国大陆当前为每年 ¥688；其他地区通常为每年 99 美元或等值本地货币 | 一份会员同时覆盖 iPhone、iPad、Mac |
 | Xcode、App Store Connect、TestFlight | ¥0 | 已包含 |
 | 隐私政策与支持页面 | ¥0 | 使用 GitHub Pages，无需购买域名 |
-| PickerRoy 售价 | 中国大陆基准价 ¥15 | iPhone/iPad + Mac 通用购买，用户只付一次 |
+| PickerRoy V1.0 | 免费下载，所有当前核心功能免费 | iPhone/iPad + Mac 同一 App 记录 |
 
-第一年的固定上架成本：**¥688**。会员资格默认按年自动续订，价格以购买页面为准。¥15 是消费者购买 PickerRoy 的价格，不是额外上架费用。
+第一年的固定上架成本：**¥688**。会员资格默认按年自动续订，价格以购买页面为准。V1.0 免费，因此首发不需要配置消费者付款产品。
 
-付费首发需要签署 Paid Apps Agreement、绑定与个人开发者实名一致的收款银行账户、填写 Apple 要求的美国及所在地税务表格，并按适用规则从销售额中扣除佣金和税费。新开发者应申请 App Store Small Business Program；最终适用费率以 Apple 批准结果和销售地区协议为准。
+V1.0 不启用付费下载、IAP 或订阅。收款银行、付费税务和 Small Business Program 可以推迟到未来明确启用商业化时处理；开发者会员身份和 App Store Connect 协议仍需按 Apple 页面要求完成。
 
 ## 你本人需要准备
 
@@ -30,8 +30,7 @@ PickerRoy 同时在 iPhone/iPad App Store 与 Mac App Store 提供下载。视�
   - 组织：显示公司法定名称，需要法人主体、工作域名邮箱、公开官网、总部电话地址、签约权限和免费的 D-U-N-S 编号；验证通常更久。
 - 一台能够安装最新版 Xcode 的 Mac。
 - 至少一台真实 iPhone 用于最终性能、发热、存储和导出测试。
-- 与个人开发者法定姓名一致的个人收款银行账户。
-- Paid Apps Agreement、税务资料和 App Store Small Business Program 申请。
+- 未来启用商业化时，再准备与个人开发者法定姓名一致的收款账户、Paid Apps Agreement、税务资料和 Small Business Program 申请。
 
 ## 我已经准备/正在准备
 
@@ -50,8 +49,8 @@ PickerRoy 同时在 iPhone/iPad App Store 与 Mac App Store 提供下载。视�
 2. 在 Signing & Capabilities 中选择你的开发团队。
 3. 确认最终 Bundle ID。项目当前临时值是 `com.roy.pickerroy`，正式上传前应改成你控制且未被占用的标识。
 4. 在 App Store Connect 只新建一条 PickerRoy App 记录，同时添加 iOS 与 macOS，两个平台使用相同 Bundle ID，形成通用购买。
-5. 签署 Paid Apps Agreement，提交个人收款银行账户与税务资料，并申请 App Store Small Business Program。
-6. 以中国大陆为基准地区选择 ¥15 价格点，其他地区先使用 Apple 自动换算价格。
+5. 将 V1.0 定价设为免费，不创建任何 IAP、订阅或付费墙。
+6. 收款银行、付费税务与未来 18/月、128/年、258/终身的商业化配置暂不启用。
 7. 配置版本号、年龄分级、分类和全球可用地区。
 8. 上传构建，先通过 TestFlight/本机测试。
 9. 填写“App 不收集数据”、出口合规、内容版权、审核联系人和审核说明。

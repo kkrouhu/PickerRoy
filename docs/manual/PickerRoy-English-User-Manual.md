@@ -1,6 +1,6 @@
 # PickerRoy English User Manual
 
-Version 0.3.0 · macOS and Windows · September 2026
+Version 0.3.1 · macOS and Windows · September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
@@ -9,6 +9,8 @@ Turn a video into photographs genuinely worth keeping.
 PickerRoy is a local-first intelligent video still-frame selector for photographers and creators. It detects shots, lets nearby candidate frames compete, and ranks a smaller, sharper, less repetitive set using technical quality, composition, portrait and landscape cues, an offline social-visual model, and your own local preferences.
 
 Your videos, previews, choices, and exports remain on your computer. The standalone app needs no Codex, Python, separate FFmpeg installation, account, subscription, or internet connection after download.
+
+The Apple App Store V1.0 release is completely free: free download, all current core features available, and no subscription, In-App Purchase, paywall, upgrade button, or restore-purchase control. Its initial two-week observation period never triggers automatic charging or locking. On iPhone and iPad, PickerRoy uses the system file picker for input and requests add-only Photos access only when saving selected results; it does not read the full photo library. Core processing has no network dependency; a physical-device airplane-mode run remains a required pre-release test.
 
 ## 1. What is new in 0.3.0
 
@@ -29,7 +31,7 @@ PickerRoy does not impose one fixed taste. Outdoor, urban advertising, indoor po
 | Apple Silicon Mac (M1/M2/M3/M4 and later) | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | 64-bit Windows 10/11 | `PickerRoy-Windows-x64.zip` |
-| Optional Codex assistance | `PickerRoy-Codex-Skill-v0.3.0.zip` |
+| Optional Codex assistance | `PickerRoy-Codex-Skill-v0.3.1.zip` |
 
 The App and the Skill are different. The App is the product an ordinary user opens. The Skill is a compact professional guide that helps Codex install, diagnose, summarize preferences privately, modify source code, test, and rebuild. Normal app use never requires Codex.
 

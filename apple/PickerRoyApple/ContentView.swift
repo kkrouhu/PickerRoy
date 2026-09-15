@@ -218,6 +218,18 @@ struct ContentView: View {
         HStack(spacing: 12) {
             Text("已选择 \(model.selectedCandidates.count) 张").font(.headline)
             Spacer()
+            #if os(iOS)
+            Button("保存到相册") {
+                model.exportToPhotoLibrary(optimized: false)
+            }
+            .disabled(model.selectedCandidates.isEmpty || model.isExporting)
+            Button("优化后存入相册") {
+                model.exportToPhotoLibrary(optimized: true)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.selectedCandidates.isEmpty || model.isExporting)
+            .help("温和提升尺寸、色彩和锐度；不会凭空恢复原视频中不存在的真实细节")
+            #else
             Button("直接导出") {
                 optimizedExport = false
                 chooseExportFolder()
@@ -230,6 +242,7 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .disabled(model.selectedCandidates.isEmpty || model.isExporting)
             .help("温和提升尺寸、色彩和锐度；不会凭空恢复原视频中不存在的真实细节")
+            #endif
         }
         .padding()
         .background(.regularMaterial)

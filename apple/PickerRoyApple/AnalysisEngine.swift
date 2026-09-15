@@ -84,23 +84,27 @@ struct AnalysisEngine {
 
         for (index, candidate) in candidates.enumerated() {
             try control.checkpoint()
-            let asset = AVURLAsset(url: candidate.sourceURL)
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.requestedTimeToleranceBefore = .zero
-            generator.requestedTimeToleranceAfter = .zero
-            let time = CMTime(seconds: candidate.time, preferredTimescale: 600)
-            guard let frame = try? generator.copyCGImage(at: time, actualTime: nil),
-                  let cropped = crop(frame, to: aspect.ratio)
-            else { continue }
+            let sourceAccessed = candidate.sourceURL.startAccessingSecurityScopedResource()
+            do {
+                defer { if sourceAccessed { candidate.sourceURL.stopAccessingSecurityScopedResource() } }
+                let asset = AVURLAsset(url: candidate.sourceURL)
+                let generator = AVAssetImageGenerator(asset: asset)
+                generator.appliesPreferredTrackTransform = true
+                generator.requestedTimeToleranceBefore = .zero
+                generator.requestedTimeToleranceAfter = .zero
+                let time = CMTime(seconds: candidate.time, preferredTimescale: 600)
+                guard let frame = try? generator.copyCGImage(at: time, actualTime: nil),
+                      let cropped = crop(frame, to: aspect.ratio)
+                else { continue }
 
-            let finalImage = optimized ? optimize(cropped) : cropped
-            let sourceName = candidate.sourceURL.deletingPathExtension().lastPathComponent
-                .replacingOccurrences(of: "/", with: "-")
-            let suffix = String(format: "%06d", Int(candidate.time * 1000))
-            let ext = optimized ? "jpg" : "png"
-            let destination = folder.appendingPathComponent("\(sourceName)-\(suffix)-\(candidate.category.rawValue).\(ext)")
-            try write(finalImage, to: destination, jpeg: optimized)
+                let finalImage = optimized ? optimize(cropped) : cropped
+                let sourceName = candidate.sourceURL.deletingPathExtension().lastPathComponent
+                    .replacingOccurrences(of: "/", with: "-")
+                let suffix = String(format: "%06d", Int(candidate.time * 1000))
+                let ext = optimized ? "jpg" : "png"
+                let destination = folder.appendingPathComponent("\(sourceName)-\(suffix)-\(candidate.category.rawValue).\(ext)")
+                try write(finalImage, to: destination, jpeg: optimized)
+            }
             progress(Double(index + 1) / Double(max(1, candidates.count)))
         }
     }

@@ -1,6 +1,6 @@
 # PickerRoy 中英双语使用说明书
 
-版本 / Version 0.3.0 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
+版本 / Version 0.3.1 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
@@ -9,6 +9,8 @@
 PickerRoy 是本地运行的视频静帧智能筛选工具。它结合技术质量、主题审美、离线热门视觉与每位用户的本机偏好，输出更少、更精、更不重复的候选照片。/ PickerRoy is a local-first intelligent still-frame selector. It combines technical quality, theme-aware aesthetics, an offline social-visual signal, and each user's local preferences to produce a smaller, sharper, less repetitive shortlist.
 
 普通用户下载 App 后即可使用，不需要 Codex、Python、单独安装 FFmpeg、账号、订阅或持续联网。/ The standalone App needs no Codex, Python, separate FFmpeg installation, account, subscription, or ongoing internet connection.
+
+Apple App Store V1.0 完全免费，所有当前核心功能开放，不包含订阅、App 内购买、付费墙、升级或恢复购买入口。两周观察期不会自动收费或锁定。iPhone/iPad 仅在保存结果时申请“添加照片”权限，不读取整个图库；核心处理无网络依赖，真机飞行模式仍是上架前必测项。/ Apple App Store V1.0 is completely free with all current core features available and no subscription, In-App Purchase, paywall, upgrade, or restore-purchase control. The two-week observation period never triggers automatic charging or locking. iPhone/iPad requests add-only Photos access only when saving results and does not read the full library. Core processing has no network dependency; a physical-device airplane-mode run remains a pre-release test.
 
 ## 1. 产品理念 / Product idea
 
@@ -25,7 +27,7 @@ PickerRoy 不把一种固定审美强加给所有人。收藏、保留、淘汰�
 | Apple 芯片 Mac / Apple Silicon Mac | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | Windows 10/11 x64 | `PickerRoy-Windows-x64.zip` |
-| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.0.zip` |
+| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.1.zip` |
 
 macOS：解压，把 App 拖入“应用程序”。如首次被拦截，Control 点击 App，选择“打开”。不要全局关闭 Gatekeeper。/ macOS: unzip, move the App to Applications, and open it. If blocked on first launch, Control-click and choose Open. Do not disable Gatekeeper globally.
 

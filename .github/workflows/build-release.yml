@@ -23,8 +23,8 @@ jobs:
             artifact: PickerRoy-Windows-x64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -86,7 +86,7 @@ jobs:
           New-Item -ItemType Directory -Force release
           Compress-Archive -Path dist\PickerRoy -DestinationPath "release\${{ matrix.artifact }}.zip"
           (Get-FileHash "release\${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.artifact }}.zip" | Set-Content "release\${{ matrix.artifact }}.zip.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: release/*
@@ -96,8 +96,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: release
           merge-multiple: true
@@ -112,6 +112,8 @@ jobs:
           cp "docs/manual/PickerRoy-English-User-Manual.pdf" "release/PickerRoy-English-User-Manual-${GITHUB_REF_NAME}.pdf"
           cp "docs/manual/PickerRoy中英双语使用说明书.pdf" "release/PickerRoy中英双语使用说明书-${GITHUB_REF_NAME}.pdf"
       - name: 创建 GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" release/* --generate-notes --title "PickerRoy ${GITHUB_REF_NAME}"
+        uses: softprops/action-gh-release@v3
+        with:
+          name: PickerRoy ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release/*

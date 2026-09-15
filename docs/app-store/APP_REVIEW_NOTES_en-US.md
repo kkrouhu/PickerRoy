@@ -9,9 +9,10 @@ Testing flow:
 3. Tap Start Analysis.
 4. Pause, resume, or cancel from the analysis controls if desired.
 5. Select recommended frames and use Like or Show Less to update the local preference profile.
-6. Export selected frames directly or with optional enhancement.
+6. On iPhone or iPad, save selected frames to Photos directly or with optional enhancement. PickerRoy requests add-only Photos access at this moment. On Mac, export to a user-selected folder.
 
 All user-selected files are accessed through system file pickers. The macOS build uses App Sandbox with user-selected read/write access. Video content and preference data are never uploaded.
 
 No login or review account is required.
 
+Version 1.0 is completely free. There is no StoreKit purchase implementation, In-App Purchase product, subscription, paywall, pricing, upgrade control, purchase control, restore-purchase control, or feature restriction in this binary.

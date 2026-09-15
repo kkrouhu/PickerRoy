@@ -33,7 +33,8 @@ Highlights:
 
 Enhanced export cannot recreate real detail that is absent from the source video. Results still depend on source resolution, compression, and crop.
 
+PickerRoy V1.0 is free to download and all current core features are available. This release has no subscription, In-App Purchase, paywall, purchase button, or restore-purchase control.
+
 ## Keywords
 
 video,frame,photo,still,offline,local,portrait,landscape,composition,export,photography
-

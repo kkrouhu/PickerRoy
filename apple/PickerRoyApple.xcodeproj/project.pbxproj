@@ -15,6 +15,7 @@
 		AA0000000000000000000007 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000007 /* ContentView.swift */; };
 		AA0000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000008 /* Assets.xcassets */; };
 		AA0000000000000000000009 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000009 /* PrivacyInfo.xcprivacy */; };
+		AA000000000000000000000D /* FeatureAccessPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000D /* FeatureAccessPolicy.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 		AB000000000000000000000A /* PickerRoy.macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickerRoy.macOS.entitlements; sourceTree = "<group>"; };
 		AB000000000000000000000B /* PickerRoy.iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickerRoy.iOS.entitlements; sourceTree = "<group>"; };
 		AB000000000000000000000C /* PickerRoy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PickerRoy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB000000000000000000000D /* FeatureAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureAccessPolicy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +62,7 @@
 				AB0000000000000000000005 /* AnalysisEngine.swift */,
 				AB0000000000000000000006 /* PickerRoyModel.swift */,
 				AB0000000000000000000007 /* ContentView.swift */,
+				AB000000000000000000000D /* FeatureAccessPolicy.swift */,
 				AB0000000000000000000008 /* Assets.xcassets */,
 				AB0000000000000000000009 /* PrivacyInfo.xcprivacy */,
 				AB000000000000000000000A /* PickerRoy.macOS.entitlements */,
@@ -140,6 +143,7 @@
 				AA0000000000000000000005 /* AnalysisEngine.swift in Sources */,
 				AA0000000000000000000006 /* PickerRoyModel.swift in Sources */,
 				AA0000000000000000000007 /* ContentView.swift in Sources */,
+				AA000000000000000000000D /* FeatureAccessPolicy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -157,18 +161,21 @@
 			CODE_SIGN_ENTITLEMENTS = "PickerRoyApple/PickerRoy.iOS.entitlements";
 			"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "PickerRoyApple/PickerRoy.macOS.entitlements";
 			CODE_SIGN_STYLE = Automatic;
-			CURRENT_PROJECT_VERSION = 3;
+			CURRENT_PROJECT_VERSION = 1;
 			DEVELOPMENT_ASSET_PATHS = "";
 			ENABLE_HARDENED_RUNTIME = YES;
 			GENERATE_INFOPLIST_FILE = YES;
 			INFOPLIST_KEY_CFBundleDisplayName = PickerRoy;
 			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 			INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 PickerRoy";
+			INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "将你选择的静帧保存到系统照片图库。";
 			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 			MACOSX_DEPLOYMENT_TARGET = 14.0;
-			MARKETING_VERSION = 0.3.0;
+			MARKETING_VERSION = 1.0.0;
 			PRODUCT_BUNDLE_IDENTIFIER = com.roy.pickerroy;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SDKROOT = auto;
@@ -182,17 +189,20 @@
 			CODE_SIGN_ENTITLEMENTS = "PickerRoyApple/PickerRoy.iOS.entitlements";
 			"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "PickerRoyApple/PickerRoy.macOS.entitlements";
 			CODE_SIGN_STYLE = Automatic;
-			CURRENT_PROJECT_VERSION = 3;
+			CURRENT_PROJECT_VERSION = 1;
 			ENABLE_HARDENED_RUNTIME = YES;
 			GENERATE_INFOPLIST_FILE = YES;
 			INFOPLIST_KEY_CFBundleDisplayName = PickerRoy;
 			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 			INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 PickerRoy";
+			INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "将你选择的静帧保存到系统照片图库。";
 			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 			MACOSX_DEPLOYMENT_TARGET = 14.0;
-			MARKETING_VERSION = 0.3.0;
+			MARKETING_VERSION = 1.0.0;
 			PRODUCT_BUNDLE_IDENTIFIER = com.roy.pickerroy;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SDKROOT = auto;
