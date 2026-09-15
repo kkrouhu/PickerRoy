@@ -35,16 +35,23 @@ struct AnalysisEngine {
         let sampleCount = min(140, max(18, Int(seconds / 1.2)))
         let step = seconds / Double(sampleCount + 1)
         var scored: [FrameCandidate] = []
+        var firstFrameError: Error?
         scored.reserveCapacity(sampleCount)
 
         for index in 0..<sampleCount {
             try control.checkpoint()
+            let second = min(seconds - 0.03, step * Double(index + 1))
+            let requested = CMTime(seconds: second, preferredTimescale: 600)
+            let frame: CGImage
+            do {
+                frame = try await generator.image(at: requested).image
+            } catch {
+                if firstFrameError == nil { firstFrameError = error }
+                progress(Double(index + 1) / Double(sampleCount))
+                continue
+            }
             autoreleasepool {
-                let second = min(seconds - 0.03, step * Double(index + 1))
-                let requested = CMTime(seconds: second, preferredTimescale: 600)
-                guard let frame = try? generator.copyCGImage(at: requested, actualTime: nil),
-                      let cropped = crop(frame, to: aspect.ratio)
-                else { return }
+                guard let cropped = crop(frame, to: aspect.ratio) else { return }
 
                 let evaluation = evaluate(cropped)
                 let base = aestheticScore(evaluation.features, category: evaluation.category)
@@ -67,6 +74,14 @@ struct AnalysisEngine {
         }
 
         try control.checkpoint()
+        guard !scored.isEmpty else {
+            let detail = firstFrameError?.localizedDescription ?? "视频中没有可读取的画面"
+            throw NSError(
+                domain: "PickerRoy",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "无法从视频读取画面：\(detail)"]
+            )
+        }
         return diverseTopFrames(from: scored, duration: seconds)
     }
 
@@ -77,7 +92,7 @@ struct AnalysisEngine {
         aspect: OutputAspect,
         control: AnalysisControl,
         progress: @escaping @Sendable (Double) -> Void
-    ) throws {
+    ) async throws {
         let accessed = folder.startAccessingSecurityScopedResource()
         defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -93,9 +108,14 @@ struct AnalysisEngine {
                 generator.requestedTimeToleranceBefore = .zero
                 generator.requestedTimeToleranceAfter = .zero
                 let time = CMTime(seconds: candidate.time, preferredTimescale: 600)
-                guard let frame = try? generator.copyCGImage(at: time, actualTime: nil),
-                      let cropped = crop(frame, to: aspect.ratio)
-                else { continue }
+                let frame = try await generator.image(at: time).image
+                guard let cropped = crop(frame, to: aspect.ratio) else {
+                    throw NSError(
+                        domain: "PickerRoy",
+                        code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: "无法按所选比例生成图片"]
+                    )
+                }
 
                 let finalImage = optimized ? optimize(cropped) : cropped
                 let sourceName = candidate.sourceURL.deletingPathExtension().lastPathComponent

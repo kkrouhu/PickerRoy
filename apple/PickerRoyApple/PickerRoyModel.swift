@@ -199,7 +199,7 @@ final class PickerRoyModel: ObservableObject {
                     Task { @MainActor in self?.progress = value }
                 }
                 try await Task.detached(priority: .userInitiated) {
-                    try AnalysisEngine().export(
+                    try await AnalysisEngine().export(
                         selected,
                         to: folder,
                         optimized: optimized,
@@ -241,7 +241,7 @@ final class PickerRoyModel: ObservableObject {
                     Task { @MainActor in self?.progress = value * 0.82 }
                 }
                 try await Task.detached(priority: .userInitiated) {
-                    try AnalysisEngine().export(
+                    try await AnalysisEngine().export(
                         selected,
                         to: temporaryFolder,
                         optimized: optimized,
