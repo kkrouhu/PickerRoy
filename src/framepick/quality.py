@@ -289,31 +289,186 @@ def aesthetic_metrics(image: np.ndarray, face_count_hint: int = 0) -> dict[str, 
     return metrics
 
 
+def _enhancement_input(image: np.ndarray) -> None:
+    if image is None or image.size == 0:
+        raise ValueError("Enhancement requires a non-empty image")
+    if image.dtype != np.uint8 or image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError("Enhancement requires an 8-bit BGR image")
+
+
+def _native_detail_statistics(image: np.ndarray) -> tuple[float, float, float, float]:
+    """Measure noise/detail in native-pixel patches; downscaling would hide noise."""
+    height, width = image.shape[:2]
+    patch_h, patch_w = min(height, 128), min(width, 128)
+    residuals, gradients, details = [], [], []
+    noise_kernel = np.asarray([[1, -2, 1], [-2, 4, -2], [1, -2, 1]], np.float32)
+    for top in sorted(set(np.linspace(0, height - patch_h, 3).astype(int))):
+        for left in sorted(set(np.linspace(0, width - patch_w, 3).astype(int))):
+            patch = image[top:top + patch_h, left:left + patch_w]
+            gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            smooth = cv2.GaussianBlur(gray, (0, 0), 1.0)
+            grad = cv2.magnitude(cv2.Sobel(smooth, cv2.CV_32F, 1, 0) / 8,
+                                 cv2.Sobel(smooth, cv2.CV_32F, 0, 1) / 8)
+            # Low-gradient regions reduce confusion between real edges and sensor noise.
+            flat = grad <= max(2.0, float(np.percentile(grad, 40)))
+            channel_residual = np.abs(cv2.filter2D(patch.astype(np.float32), -1, noise_kernel))
+            residuals.append(channel_residual[flat].reshape(-1))
+            gradients.append(grad.reshape(-1))
+            details.append(np.abs(cv2.Laplacian(gray, cv2.CV_32F)).reshape(-1))
+    noise_sigma = float(np.median(np.concatenate(residuals)) / (6 * 0.67449))
+    gradient = np.concatenate(gradients)
+    detail = np.concatenate(details)
+    structured = gradient > max(2.0, noise_sigma * 0.65 + 1.0)
+    edge_fraction = float(structured.mean())
+    edge_strength = float(np.percentile(gradient[structured], 70)) if structured.any() else 0.0
+    detail_ratio = float(detail[structured].mean() / max(gradient[structured].mean(), 0.001)) if structured.any() else 0.0
+    return noise_sigma, edge_fraction, edge_strength, detail_ratio
+
+
+def enhancement_diagnostics(image: np.ndarray) -> dict[str, float | int | bool | str]:
+    """Return deterministic, JSON-safe scene measurements and enhancement strengths.
+
+    Luma, saturation, fractions and tone strengths use 0–1 units; ``noise_sigma``
+    and ``edge_strength`` are native 8-bit pixel-value estimates. These are
+    heuristics, not measurements of recovered detail or photographic quality.
+    No face recognition, external model, upload, resize or pixel synthesis occurs.
+    """
+    _enhancement_input(image)
+    height, width = image.shape[:2]
+    scale = min(1.0, 768 / max(height, width))
+    sample = cv2.resize(image, (max(1, round(width * scale)), max(1, round(height * scale))),
+                        interpolation=cv2.INTER_AREA) if scale < 1 else image
+    pixels = sample.astype(np.float32) / 255.0
+    luma = cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(pixels, cv2.COLOR_BGR2HSV)
+    p05, median, p95 = (float(value) for value in np.percentile(luma, [5, 50, 95]))
+    dynamic_range = p95 - p05
+    mean = float(luma.mean())
+    saturation = hsv[:, :, 1]
+    mean_saturation = float(saturation.mean())
+    shadow_fraction = float(np.mean((luma > 0.025) & (luma < 0.28)))
+    shadow_pixels = luma[(luma > 0.025) & (luma < 0.28)]
+    shadow_median = float(np.median(shadow_pixels)) if shadow_pixels.size else 0.28
+    highlight_fraction = float(np.mean(luma > 0.94))
+    noise, edge_fraction, edge_strength, detail_ratio = _native_detail_statistics(image)
+
+    # Uniform/empty signal and noise-only frames must not acquire artificial punch.
+    blank = dynamic_range < 0.018
+    noise_only = noise > 2.0 and edge_fraction < 0.004
+    protect = blank or noise_only
+    noise_guard = float(np.clip((5.0 - noise) / 4.0, 0.12, 1.0))
+    contrast_need = float(np.clip((0.70 - dynamic_range) / 0.48, 0, 1))
+    contrast_strength = 0.22 * contrast_need * noise_guard if not protect else 0.0
+    # Do not open a nearly black frame or bleach a low-key scene into daylight.
+    # Bright skies must not veto usable shaded foreground. Measure the shadow
+    # population itself, independently of the overall median exposure.
+    shadow_need = float(np.clip((0.28 - shadow_median) / 0.15, 0, 1))
+    shadow_evidence = float(np.clip(shadow_fraction / 0.24, 0, 1))
+    usable_exposure = float(np.clip((mean - 0.035) / 0.11, 0, 1))
+    shadow_lift = 0.065 * shadow_need * shadow_evidence * usable_exposure * noise_guard if not protect else 0.0
+    saturation_strength = (0.22 * float(np.clip((0.58 - mean_saturation) / 0.42, 0, 1))
+                           * noise_guard if not protect else 0.0)
+    # Neither noise nor already crisp contours count as softness. Severe defocus
+    # and essentially featureless gradients also get no sharpening.
+    slight_softness = (0.006 <= edge_fraction <= 0.75 and edge_strength >= 3.0
+                       and 0.35 <= detail_ratio <= 0.75 and noise <= 1.25)
+    sharpen_amount = (0.06 * float(np.clip((detail_ratio - 0.35) / 0.15, 0, 1))
+                      * float(np.clip((0.80 - detail_ratio) / 0.20, 0, 1))
+                      * float(np.clip((1.5 - noise) / 1.5, 0, 1))) if slight_softness and not protect else 0.0
+    return {
+        "algorithm": "adaptive-tone-v2", "width": width, "height": height,
+        "mean_luma": mean, "median_luma": median, "luma_p05": p05, "luma_p95": p95,
+        "dynamic_range": dynamic_range, "mean_saturation": mean_saturation,
+        "shadow_fraction": shadow_fraction, "shadow_median": shadow_median,
+        "highlight_fraction": highlight_fraction,
+        "noise_sigma": noise, "structured_edge_fraction": edge_fraction,
+        "edge_strength": edge_strength, "detail_ratio": detail_ratio,
+        "contrast_strength": contrast_strength, "shadow_lift": shadow_lift,
+        "saturation_strength": saturation_strength, "sharpen_amount": sharpen_amount,
+        "protected_frame": protect,
+        "reason": "uniform_or_missing_signal" if blank else "noise_without_structure" if noise_only else "adaptive",
+    }
+
+
 def optimized_export_image(image: np.ndarray, source_width: int, source_height: int,
                            max_scale: float = 2.0, max_megapixels: float = 24.0) -> np.ndarray:
-    """Gently restore cropped output with pixel-area recovery, tone, color and sharpening."""
+    """Enhance existing SDR tones/color at exactly the input pixel dimensions.
+
+    Source dimensions and legacy scaling limits remain accepted for caller
+    compatibility, but no longer cause interpolation, super-resolution or crop
+    recovery. All edits operate on the decoded 8-bit image, not an HDR master.
+    """
+    settings = enhancement_diagnostics(image)
+    if settings["protected_frame"]:
+        return image.copy()
+    # Keep float intermediates bounded for 4K/8K exports. The shared scene
+    # measurements are fixed for every strip; a halo makes the optional local
+    # filter identical at strip boundaries, without visible seams.
     height, width = image.shape[:2]
-    source_area = max(1, source_width * source_height)
-    current_area = max(1, width * height)
-    scale = max(1.0, min(max_scale, math.sqrt(source_area / current_area)))
-    target_area = current_area * scale * scale
-    if target_area > max_megapixels * 1_000_000:
-        scale *= math.sqrt((max_megapixels * 1_000_000) / target_area)
-    if scale > 1.015:
-        image = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_LANCZOS4)
+    rows = max(32, 524_288 // width)
+    halo = 4 if float(settings["sharpen_amount"]) > 0 else 0
+    output = np.empty_like(image)
+    for top in range(0, height, rows):
+        bottom = min(height, top + rows)
+        start, end = max(0, top - halo), min(height, bottom + halo)
+        strip = _apply_enhancement(image[start:end], settings)
+        output[top:bottom] = strip[top - start:bottom - start]
+    return output
 
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    l_channel, a_channel, b_channel = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=1.55, tileGridSize=(8, 8))
-    balanced_l = clahe.apply(l_channel)
-    l_channel = cv2.addWeighted(l_channel, 0.68, balanced_l, 0.32, 0)
-    toned = cv2.cvtColor(cv2.merge((l_channel, a_channel, b_channel)), cv2.COLOR_LAB2BGR)
 
-    hsv = cv2.cvtColor(toned, cv2.COLOR_BGR2HSV).astype(np.float32)
-    mean_saturation = float(hsv[:, :, 1].mean())
-    saturation_gain = 1.08 if mean_saturation < 150 else 1.02
-    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * saturation_gain, 0, 255)
-    toned = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+def _apply_enhancement(image: np.ndarray, settings: dict[str, float | int | bool | str]) -> np.ndarray:
+    """Apply fixed scene settings to one native-pixel strip plus filter halo."""
+    pixels = image.astype(np.float32) / 255.0
+    luma = cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY)
+    pivot = float(np.clip(settings["median_luma"], 0.36, 0.55))
+    contrast_delta = float(settings["contrast_strength"]) * (luma - pivot) * 4 * luma * (1 - luma)
+    # Smooth shadow lift goes to zero at black and at 60% brightness. It cannot
+    # reveal information that clipping or blur has already removed.
+    shadow_x = np.clip(luma / 0.60, 0, 1)
+    shadow_curve = (27.0 / 4.0) * shadow_x * (1 - shadow_x) ** 2
+    contrast_delta *= 1 - 0.75 * (float(settings["shadow_lift"]) / 0.065) * shadow_curve
+    target_luma = luma + contrast_delta + float(settings["shadow_lift"]) * shadow_curve
+    endpoint_guard = np.minimum(np.clip((luma - 0.012) / 0.055, 0, 1), np.clip((1 - luma) / 0.10, 0, 1))
+    target_luma = luma + (target_luma - luma) * endpoint_guard
+    target_luma = np.clip(target_luma, 0, 1)
 
-    blurred = cv2.GaussianBlur(toned, (0, 0), 1.05)
-    return cv2.addWeighted(toned, 1.34, blurred, -0.34, 0)
+    amount = float(settings["sharpen_amount"])
+    if amount > 0:
+        detail = target_luma - cv2.GaussianBlur(target_luma, (0, 0), 0.70)
+        threshold = (0.5 + 2 * float(settings["noise_sigma"])) / 255
+        detail = np.sign(detail) * np.maximum(np.abs(detail) - threshold, 0)
+        adjusted = target_luma + np.clip(amount * detail, -0.8 / 255, 0.8 / 255)
+        # A local extrema bound prevents bright/dark ringing at hard boundaries.
+        target_luma = np.clip(adjusted, cv2.erode(target_luma, np.ones((3, 3), np.uint8)),
+                              cv2.dilate(target_luma, np.ones((3, 3), np.uint8)))
+
+    # A shared RGB gain preserves hue and saturation when opening shade. An
+    # additive white lift would wash out exactly the dark grass/rocks being
+    # improved. RGB headroom caps the gain without clipping individual channels.
+    maximum, minimum = pixels.max(axis=2), pixels.min(axis=2)
+    tone_gain = target_luma / np.maximum(luma, 1e-6)
+    upper_gain = np.maximum(1, (254 / 255) / np.maximum(maximum, 1e-6))
+    lower_gain = np.where(minimum > 0, (1 / 255) / np.maximum(minimum, 1e-6), 0)
+    tone_gain = np.clip(tone_gain, lower_gain, upper_gain)
+    toned = pixels * tone_gain[:, :, None]
+    hsv = cv2.cvtColor(pixels, cv2.COLOR_BGR2HSV)
+    saturation, hue = hsv[:, :, 1], hsv[:, :, 0]
+    colorful_protection = np.clip((0.86 - saturation) / 0.62, 0, 1)
+    # A soft warm-hue safeguard is deliberately conservative: it also protects
+    # wood/sand/orange objects rather than pretending to identify a person's skin.
+    warm = np.clip(1 - np.abs(hue - 25) / 35, 0, 1)
+    skin_protection = 1 - 0.75 * warm * np.clip(saturation / 0.12, 0, 1)
+    brightness_protection = np.minimum(np.clip(luma / 0.12, 0, 1), np.clip((1 - luma) / 0.16, 0, 1))
+    gain = 1 + float(settings["saturation_strength"]) * colorful_protection * skin_protection * brightness_protection
+    toned_luma = luma * tone_gain
+    color_delta = toned - toned_luma[:, :, None]
+    # Bound chroma expansion by RGB headroom instead of clipping individual
+    # channels, which can shift hues in saturated flowers, signs or clothing.
+    upper = np.maximum(toned, 254 / 255)
+    lower = np.minimum(toned, 1 / 255)
+    positive_limit = (upper - toned_luma[:, :, None]) / np.maximum(color_delta, 1e-6)
+    negative_limit = (toned_luma[:, :, None] - lower) / np.maximum(-color_delta, 1e-6)
+    gamut_limit = np.where(color_delta > 0, positive_limit, negative_limit).min(axis=2)
+    gain = np.minimum(gain, np.maximum(1, gamut_limit))
+    output = toned_luma[:, :, None] + color_delta * gain[:, :, None]
+    return np.rint(np.clip(output, 0, 1) * 255).astype(np.uint8)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
+import tempfile
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -72,10 +74,18 @@ class VideoAnalyzer:
                 self.config.min_candidates_per_shot, self.config.max_candidates_per_shot,
                 self.config.base_sample_interval, self.config.dynamic_sample_interval,
             )
-            for local_index, timestamp in enumerate(times):
+            for timestamp in times:
                 self._checkpoint()
-                candidate_id = f"{shot.id}-{ratio_key}-f{local_index:04d}"
-                preview_path = previews / f"{candidate_id}.jpg"
+                # Match FFmpeg's actual seek argument, not the sampling index:
+                # another mode can put a completely different time at f0001.
+                decode_time = f"{max(0, timestamp):.6f}"
+                timestamp = float(decode_time)
+                identity_base = f"{shot.id}-v2-{ratio_key}-p{self.config.preview_width}-t{decode_time.replace('.', 'p')}"
+                candidate_id = f"{identity_base}-unresolved"
+                with tempfile.NamedTemporaryFile(prefix="candidate-v2-", suffix=".jpg", dir=previews,
+                                                 delete=False) as temporary:
+                    source_preview = Path(temporary.name)
+                preview_path = source_preview
                 candidate = Candidate(
                     id=candidate_id,
                     video_id=video.id,
@@ -88,10 +98,25 @@ class VideoAnalyzer:
                 try:
                     extract_preview(video.path, timestamp, preview_path, self.config.preview_width, self.control)
                     image = read_image(preview_path)
+                    source_shape = image.shape[:2]
                     image, crop_box = smart_crop_to_aspect(image, ASPECT_RATIOS.get(self.config.aspect_ratio))
                     candidate.crop_box = crop_box
+                    # Include the actual layout, not just the requested ratio.
+                    # The precision matches export_frame's normalized crop.
+                    geometry = json.dumps({
+                        "identity": identity_base,
+                        "crop": [f"{value:.8f}" for value in crop_box],
+                        "source_shape": list(source_shape),
+                        "crop_shape": list(image.shape[:2]),
+                    }, sort_keys=True, separators=(",", ":"))
+                    layout_hash = hashlib.sha256(geometry.encode("utf-8")).hexdigest()[:20]
+                    candidate.id = f"{identity_base}-{layout_hash}"
+                    final_preview = previews / f"{candidate.id}.jpg"
                     if crop_box != [0.0, 0.0, 1.0, 1.0]:
                         write_image(preview_path, image)
+                    source_preview.replace(final_preview)
+                    preview_path = final_preview
+                    candidate.preview_path = str(final_preview)
                     scores, reasons = technical_metrics(image, shot.motion)
                     scores.update(composition_metrics(image))
                     try:
@@ -125,6 +150,8 @@ class VideoAnalyzer:
                     candidate.reject_reasons = ["decode_or_analysis_error"]
                     candidate.scores = {"technical": 0.0, "final": 0.0}
                     candidate.labels = ["Other"]
+                finally:
+                    source_preview.unlink(missing_ok=True)
                 all_candidates.append(candidate)
                 shot_candidates.append(candidate)
             valid_candidates = [item for item in shot_candidates if Path(item.preview_path).exists() and item.scores]

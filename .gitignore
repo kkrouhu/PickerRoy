@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 work/
+gui-data/
 .framepick-data/
 .pickerroy-data/
 build/

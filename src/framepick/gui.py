@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -41,6 +42,8 @@ from .models import AnalysisResult, Candidate
 from .pipeline import VideoAnalyzer, discover_videos
 from .runtime import runtime_checks, runtime_ready
 from .resources import resource_path
+from .usage_notice import NOTICE_PARAGRAPHS, NOTICE_TITLE, UsageNoticeStore
+from . import __version__
 
 LOGGER = logging.getLogger(__name__)
 
@@ -208,6 +211,39 @@ class ImagePreviewDialog(QDialog):
         layout.addWidget(QLabel(f"{candidate.timestamp:.3f} 秒  ·  {categories}  ·  评分 {candidate.final_score:.2f}"))
 
 
+class UsageNoticeDialog(QDialog):
+    def __init__(self, parent=None, require_acknowledgement: bool = True):
+        super().__init__(parent)
+        self.setWindowTitle(NOTICE_TITLE)
+        self.setMinimumWidth(460)
+        self.setMaximumWidth(540)
+        layout = QVBoxLayout(self)
+        heading = QLabel(NOTICE_TITLE)
+        heading.setStyleSheet("font-size: 20px; font-weight: 700;")
+        layout.addWidget(heading)
+        for paragraph in NOTICE_PARAGRAPHS:
+            label = QLabel(paragraph)
+            label.setWordWrap(True)
+            layout.addWidget(label)
+        if require_acknowledgement:
+            self.confirmation = QCheckBox("我已阅读并理解素材与使用须知")
+            self.confirmation.setChecked(False)
+            layout.addWidget(self.confirmation)
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            self.continue_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+            self.continue_button.setText("继续导入")
+            self.continue_button.setEnabled(False)
+            buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("暂不导入")
+            self.confirmation.toggled.connect(self.continue_button.setEnabled)
+            buttons.accepted.connect(self.accept)
+            buttons.rejected.connect(self.reject)
+        else:
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+            buttons.button(QDialogButtonBox.StandardButton.Close).setText("关闭")
+            buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
 class ExportOptionsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -217,18 +253,10 @@ class ExportOptionsDialog(QDialog):
         title = QLabel("选择导出方式")
         title.setStyleSheet("font-size: 18px; font-weight: 700;")
         layout.addWidget(title)
-        layout.addWidget(QLabel("你可以保留原始画面，也可以一键补足裁切后的像素并温和优化观感。"))
         self.mode = QComboBox()
         self.mode.addItem("直接导出（忠实保留原画）", False)
-        self.mode.addItem("优化后导出（补像素 + 色彩/对比/锐度）", True)
+        self.mode.addItem("增强画质", True)
         layout.addWidget(self.mode)
-        note = QLabel(
-            "优化会使用高质量插值，把裁切损失的像素量尽量补回（单边最高 2 倍、最高 2400 万像素），"
-            "并进行克制的色彩、局部对比和锐度处理。它能改善观看与交付尺寸，但不会凭空恢复原视频里不存在的真实细节。"
-        )
-        note.setObjectName("subtitle")
-        note.setWordWrap(True)
-        layout.addWidget(note)
         layout.addWidget(QLabel("图片格式"))
         self.format = QComboBox()
         self.format.addItem("PNG（无损、文件较大）", "PNG")
@@ -281,6 +309,7 @@ class CandidateCard(QFrame):
         self.reject.setObjectName("danger")
         self.favorite = QPushButton("★")
         self.favorite.setObjectName("favorite")
+        self.favorite.setToolTip("收藏：特别喜欢，也会加入导出选择。标记后仍需导出才能保存图片。")
         self.keep.clicked.connect(lambda: self._send("KEEP"))
         self.reject.clicked.connect(lambda: self._send("REJECT"))
         self.favorite.clicked.connect(lambda: self._send("FAVORITE"))
@@ -308,6 +337,7 @@ class MainWindow(QMainWindow):
         self.data_dir = data_dir
         self.log_path = log_path
         self.store = FeedbackStore(data_dir / "pickerroy.sqlite3")
+        self.usage_notice = UsageNoticeStore(data_dir)
         self.pending_paths: list[Path] = []
         self.active_paths: set[Path] = set()
         self.results: list[AnalysisResult] = []
@@ -536,6 +566,7 @@ class MainWindow(QMainWindow):
         self.personalization_detail.setWordWrap(True)
         self.personalization_progress = QProgressBar()
         self.personalization_progress.setRange(0, 100)
+        self.personalization_progress.setFormat("学习样本积累 %p%（不是准确率）")
         learning_layout.addWidget(self.personalization_title)
         learning_layout.addWidget(self.personalization_detail)
         learning_layout.addWidget(self.personalization_progress)
@@ -567,7 +598,7 @@ class MainWindow(QMainWindow):
         return page
 
     def _settings_page(self) -> QWidget:
-        page, layout = self._page_shell("设置", "先确认运行环境，再按内容选择选帧侧重点；所有处理都在本机完成。")
+        page, layout = self._page_shell("设置", f"PickerRoy {__version__} · 先确认运行环境，再按内容选择选帧侧重点；所有处理都在本机完成。")
         health_panel = QFrame()
         health_panel.setObjectName("panel")
         health_layout = QVBoxLayout(health_panel)
@@ -603,6 +634,9 @@ class MainWindow(QMainWindow):
         data_note.setWordWrap(True)
         panel_layout.addWidget(data_note)
         layout.addWidget(panel)
+        usage_button = QPushButton("素材与使用须知")
+        usage_button.clicked.connect(lambda: UsageNoticeDialog(self, require_acknowledgement=False).exec())
+        layout.addWidget(usage_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
         self.refresh_runtime_status()
         return page
@@ -628,6 +662,8 @@ class MainWindow(QMainWindow):
             self.add_inputs([path])
 
     def add_inputs(self, raw_paths: list[str]) -> None:
+        if not raw_paths or not self.confirm_usage_notice():
+            return
         videos = discover_videos(raw_paths)
         existing = set(self.pending_paths)
         added = 0
@@ -679,6 +715,8 @@ class MainWindow(QMainWindow):
     def start_analysis(self) -> None:
         if not self.pending_paths:
             return
+        if not self.confirm_usage_notice():
+            return
         if not self.environment_ready:
             QMessageBox.warning(self, "运行环境未就绪", "请先打开“设置”查看运行环境自检结果。")
             return
@@ -702,6 +740,19 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(True)
         self.pause_button.setText("暂停分析")
         self.worker.start()
+
+    def confirm_usage_notice(self) -> bool:
+        if self.usage_notice.acknowledged():
+            return True
+        if UsageNoticeDialog(self).exec() != QDialog.DialogCode.Accepted:
+            self.import_status.setText("尚未确认素材与使用须知，未导入或分析视频")
+            return False
+        try:
+            self.usage_notice.acknowledge()
+        except OSError:
+            QMessageBox.warning(self, "无法保存确认记录", "请检查本地数据目录是否可写，再重新确认。")
+            return False
+        return True
 
     def toggle_pause(self) -> None:
         if not self.worker or not self.worker.isRunning():
@@ -852,7 +903,7 @@ class MainWindow(QMainWindow):
             return
         finally:
             QApplication.restoreOverrideCursor()
-        mode_text = "优化后" if optimized else "直接"
+        mode_text = "增强画质并" if optimized else "直接"
         QMessageBox.information(self, "导出完成", f"已{mode_text}导出 {len(outputs)} 张画面。")
 
     def _pair_pool(self) -> list[tuple[Candidate, Candidate]]:
@@ -902,21 +953,22 @@ class MainWindow(QMainWindow):
         videos = int(stats["videos"])
         progress = min(100, round(100 * pairs / 50))
         self.personalization_progress.setValue(progress)
-        if pairs >= 50:
-            title = "你的专属 PickerRoy 已形成稳定偏好"
-        elif pairs >= 15:
-            title = "PickerRoy 正在明显适应你的审美"
-        elif pairs:
-            title = "PickerRoy 已开始认识你的选择"
+        if pairs:
+            title = "越选，越懂你的眼光"
         else:
             title = "你的专属 PickerRoy 正在起步"
         decisions = stats["decisions"]
         top = "、".join(CATEGORY_ZH.get(name, name) for name, _count in stats["top_categories"]) or "尚未形成"
+        applied = max((int(candidate.scores.get("personal_preference_samples", 0))
+                       for result in self.results for candidate in result.candidates), default=0)
+        applied_text = (f"当前载入结果最多参考了 {applied} 组本机比较。" if applied else
+                        "当前载入结果尚未使用本机比较。")
         self.personalization_title.setText(title)
         self.personalization_detail.setText(
             f"已分析 {videos} 条视频，形成 {pairs} 组有效学习对；"
             f"收藏 {decisions['FAVORITE']}、保留 {decisions['KEEP']}、淘汰 {decisions['REJECT']}。"
-            f"当前偏好方向：{top}。继续选择画面，下一次分析会自动应用新的本机模型。"
+            f"常保留的主题：{top}。{applied_text}"
+            "新的有效选择会在下一次分析时参与排序；仅增加导入次数不会自动提升准确率。"
         )
 
     def closeEvent(self, event) -> None:

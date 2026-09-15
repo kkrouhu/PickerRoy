@@ -199,7 +199,7 @@ final class PickerRoyModel: ObservableObject {
         }
         isExporting = true
         progress = 0
-        statusMessage = optimized ? "正在优化并导出……" : "正在导出原始截图……"
+        statusMessage = optimized ? "正在增强画质并导出……" : "正在导出原始截图……"
         let exportControl = AnalysisControl()
         let selectedAspect = aspect
         let runID = UUID()
@@ -244,7 +244,7 @@ final class PickerRoyModel: ObservableObject {
 
         isExporting = true
         progress = 0
-        statusMessage = optimized ? "正在优化并保存到相册……" : "正在保存到相册……"
+        statusMessage = optimized ? "正在增强画质并保存到相册……" : "正在保存到相册……"
         let exportControl = AnalysisControl()
         let selectedAspect = aspect
         let runID = UUID()

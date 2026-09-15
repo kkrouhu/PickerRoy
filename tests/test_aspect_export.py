@@ -29,7 +29,7 @@ def test_full_resolution_export_respects_square_crop(tmp_path):
 
 
 @pytest.mark.integration
-def test_optimized_export_upscales_a_portrait_crop(tmp_path):
+def test_enhanced_export_keeps_original_portrait_crop_dimensions(tmp_path):
     if not shutil.which("ffmpeg"):
         pytest.skip("FFmpeg not installed")
     video_path = tmp_path / "wide.mp4"
@@ -47,6 +47,5 @@ def test_optimized_export_upscales_a_portrait_crop(tmp_path):
     [output] = export_candidates(video, [candidate], tmp_path / "out", "PNG", optimized=True)
     image = cv2.imread(str(output))
     assert image is not None
-    assert image.shape[0] > 360
-    assert image.shape[1] > 270
+    assert image.shape[:2] == (360, 270)
     assert output.name.endswith("_optimized.png")

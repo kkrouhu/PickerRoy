@@ -294,30 +294,218 @@ struct AnalysisEngine {
         return data as Data
     }
 
-    private func optimize(_ image: CGImage) -> CGImage {
-        var current = CIImage(cgImage: image)
-        let controls = CIFilter.colorControls()
-        controls.inputImage = current
-        controls.contrast = 1.035
-        controls.saturation = 1.045
-        controls.brightness = 0.006
-        current = controls.outputImage ?? current
+    // Enhancement is a restrained photographic adjustment, not super-resolution.
+    // Internal visibility lets generated-fixture tests exercise the shipping path.
+    struct EnhancementRecipe {
+        let contrast: Double
+        let pivot: Double
+        let shadows: Double
+        let vibrance: Double
+        let sharpness: Double
+        let noise: Double
+        let gradient: Double
 
-        let sharpen = CIFilter.sharpenLuminance()
-        sharpen.inputImage = current
-        sharpen.sharpness = 0.34
-        current = sharpen.outputImage ?? current
-
-        let area = current.extent.width * current.extent.height
-        let scale = min(2.0, max(1.0, sqrt(12_000_000.0 / max(1, area))))
-        if scale > 1.01 {
-            let lanczos = CIFilter.lanczosScaleTransform()
-            lanczos.inputImage = current
-            lanczos.scale = Float(scale)
-            lanczos.aspectRatio = 1
-            current = lanczos.outputImage ?? current
+        var isIdentity: Bool {
+            contrast == 0 && shadows == 0 && vibrance == 0 && sharpness == 0
         }
-        return context.createCGImage(current, from: current.extent) ?? image
+    }
+
+    func enhancementRecipe(for image: CGImage) -> EnhancementRecipe {
+        let preview = enhancementPixels(image, maximumSide: 256)
+        guard !preview.luminances.isEmpty else {
+            return EnhancementRecipe(contrast: 0, pivot: 0.5, shadows: 0, vibrance: 0, sharpness: 0, noise: 0, gradient: 0)
+        }
+        let ordered = preview.luminances.sorted()
+        func percentile(_ fraction: Double) -> Double { ordered[Int(Double(ordered.count - 1) * fraction)] }
+        let low = percentile(0.05), high = percentile(0.95), median = percentile(0.5)
+        let span = high - low
+        let count = Double(ordered.count)
+        let shadowPixels = ordered.filter { $0 > 0.025 && $0 < 0.28 }
+        let shadowFraction = Double(shadowPixels.count) / count
+        let shadowMedian = shadowPixels.isEmpty ? 0.28 : shadowPixels[(shadowPixels.count - 1) / 2]
+        let meanLuminance = ordered.reduce(0, +) / count
+        let clippedFraction = Double(ordered.filter { $0 < 0.015 || $0 > 0.985 }.count) / count
+        let meanSaturation = preview.saturations.reduce(0, +) / count
+
+        // Native-resolution patches keep high-frequency noise from disappearing
+        // in the downscaled overview. This is a conservative noise proxy, not a
+        // blur/noise classifier; an ambiguous patch should disable sharpening.
+        let patchSide = min(192, min(image.width, image.height))
+        var gradients: [Double] = [], residuals: [Double] = []
+        for position in [0.25, 0.5, 0.75] {
+            let x = Int(Double(image.width - patchSide) * position)
+            let y = Int(Double(image.height - patchSide) * position)
+            guard patchSide >= 3,
+                  let patch = image.cropping(to: CGRect(x: x, y: y, width: patchSide, height: patchSide)) else { continue }
+            let pixels = enhancementPixels(patch, maximumSide: patchSide)
+            guard pixels.luminances.count == patchSide * patchSide else { continue }
+            for row in 1..<(patchSide - 1) {
+                for column in 1..<(patchSide - 1) {
+                    let p = row * patchSide + column
+                    let neighbors = pixels.luminances[p - 1] + pixels.luminances[p + 1]
+                        + pixels.luminances[p - patchSide] + pixels.luminances[p + patchSide]
+                    let gradient = (abs(pixels.luminances[p + 1] - pixels.luminances[p - 1])
+                        + abs(pixels.luminances[p + patchSide] - pixels.luminances[p - patchSide])) / 4
+                    gradients.append(gradient)
+                    residuals.append(abs(pixels.luminances[p] - neighbors / 4))
+                }
+            }
+        }
+        let gradient = gradients.isEmpty ? 0 : gradients.reduce(0, +) / Double(gradients.count)
+        // A mean catches distributed noise; the upper quartile avoids judging a
+        // mostly flat frame from a single sharp object edge alone.
+        residuals.sort()
+        let noise = residuals.isEmpty ? 0 : max(
+            residuals.reduce(0, +) / Double(residuals.count),
+            residuals[Int(Double(residuals.count - 1) * 0.75)] * 0.65
+        )
+        let noiseSafety = ((0.018 - noise) / 0.015).clamped(to: 0...1)
+        let usefulRange = span > 0.025 && high > 0.06 && low < 0.94
+        let contrastNeed = ((0.70 - span) / 0.55).clamped(to: 0...1)
+        let contrast = usefulRange ? 0.22 * contrastNeed * (0.55 + 0.45 * noiseSafety)
+            * (1 - min(0.7, clippedFraction)) : 0
+        // Judge usable shadows independently of a bright sky. A global median
+        // exposure gate can otherwise disable exactly the foreground detail the
+        // user wants to see. Nearly black/noisy frames still get no strong lift.
+        let shadowNeed = ((0.28 - shadowMedian) / 0.15).clamped(to: 0...1)
+        let shadowEvidence = (shadowFraction / 0.24).clamped(to: 0...1)
+        let usableExposure = ((meanLuminance - 0.035) / 0.11).clamped(to: 0...1)
+        let shadows = usefulRange ? 0.065 * shadowNeed * shadowEvidence * usableExposure * noiseSafety : 0
+        let vibrance = usefulRange ? 0.18 * ((0.48 - meanSaturation) / 0.40).clamped(to: 0...1)
+            * (0.6 + 0.4 * noiseSafety) : 0
+        let structure = ((gradient - 0.004) / 0.009).clamped(to: 0...1)
+        let softness = ((0.050 - gradient) / 0.030).clamped(to: 0...1)
+        let sharpness = usefulRange && noise < 0.012 && gradient > 0.004 && gradient < 0.05
+            ? 0.045 * structure * softness * noiseSafety : 0
+        return EnhancementRecipe(
+            contrast: contrast, pivot: median.clamped(to: 0.36...0.55), shadows: shadows,
+            vibrance: vibrance, sharpness: sharpness, noise: noise, gradient: gradient
+        )
+    }
+
+    func optimize(_ image: CGImage) -> CGImage {
+        let recipe = enhancementRecipe(for: image)
+        guard !recipe.isIdentity else { return image }
+        let source = CIImage(cgImage: image)
+        var current = source
+        if recipe.sharpness > 0 {
+            let sharpen = CIFilter.sharpenLuminance()
+            sharpen.inputImage = current.clampedToExtent()
+            sharpen.sharpness = Float(recipe.sharpness)
+            current = (sharpen.outputImage ?? current).cropped(to: source.extent)
+        }
+
+        // A small 3D lookup table performs hue-preserving tonal/color changes.
+        // Both statistics and this context use display-referred sRGB; without an
+        // explicit working color space the same formula would run in linear light.
+        let dimension = 33
+        var cube = [Float]()
+        cube.reserveCapacity(dimension * dimension * dimension * 4)
+        for blue in 0..<dimension {
+            for green in 0..<dimension {
+                for red in 0..<dimension {
+                    let rgb = enhancedColor(
+                        red: Double(red) / Double(dimension - 1),
+                        green: Double(green) / Double(dimension - 1),
+                        blue: Double(blue) / Double(dimension - 1), recipe: recipe
+                    )
+                    cube.append(contentsOf: [Float(rgb.0), Float(rgb.1), Float(rgb.2), 1])
+                }
+            }
+        }
+        let lookup = CIFilter.colorCube()
+        lookup.inputImage = current
+        lookup.cubeDimension = Float(dimension)
+        lookup.cubeData = cube.withUnsafeBytes { Data($0) }
+        current = lookup.outputImage ?? current
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        let enhancementContext = CIContext(options: [
+            .workingColorSpace: sRGB, .outputColorSpace: sRGB, .cacheIntermediates: false
+        ])
+        // No resampling or upscaling: selected frame and crop dimensions remain
+        // exactly the same. The original-quality branch never calls this method.
+        return enhancementContext.createCGImage(
+            current.cropped(to: source.extent), from: source.extent, format: .RGBA8, colorSpace: sRGB
+        ) ?? image
+    }
+
+    private func enhancedColor(red r: Double, green g: Double, blue b: Double, recipe: EnhancementRecipe) -> (Double, Double, Double) {
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        let maximum = max(r, max(g, b)), minimum = min(r, min(g, b))
+        let saturation = maximum > 0 ? (maximum - minimum) / maximum : 0
+        var contrastDelta = recipe.contrast * (luminance - recipe.pivot) * 4 * luminance * (1 - luminance)
+        let shadowPosition = (luminance / 0.60).clamped(to: 0...1)
+        let shadowBell = 6.75 * shadowPosition * pow(1 - shadowPosition, 2)
+        // Avoid cancelling the requested shadow lift with the darker half of
+        // the contrast curve; protect near-black and highlight endpoints.
+        contrastDelta *= 1 - 0.75 * (recipe.shadows / 0.065) * shadowBell
+        let endpointGuard = min(
+            ((luminance - 0.012) / 0.055).clamped(to: 0...1),
+            ((1 - luminance) / 0.10).clamped(to: 0...1)
+        )
+        let targetLuminance = (luminance + (contrastDelta + recipe.shadows * shadowBell) * endpointGuard).clamped(to: 0...1)
+        // Scale RGB together for the tonal adjustment. Adding the same white
+        // offset to each channel would wash color out of a lifted foreground.
+        var toneGain = luminance > 0 ? targetLuminance / luminance : 1
+        if maximum > 0 {
+            let ceiling = maximum >= 1 ? 1 : max(maximum, 254.0 / 255)
+            toneGain = min(toneGain, ceiling / maximum)
+        }
+        if minimum > 0 {
+            toneGain = max(toneGain, min(1, (1.0 / 255) / minimum))
+        }
+        let newLuminance = luminance * toneGain
+        // Warm skin-like colors get less saturation. This deliberately errs on
+        // the protective side and is not face/identity recognition.
+        let skinLike = r > g && g > b && r - b > 0.04 && r - g < 0.30
+            && saturation > 0.08 && saturation < 0.65
+        let colorGain = 1 + recipe.vibrance * pow(1 - saturation, 2) * (skinLike ? 0.25 : 1)
+        var chroma = [(r - luminance) * toneGain * colorGain, (g - luminance) * toneGain * colorGain,
+                      (b - luminance) * toneGain * colorGain]
+        // Compress chroma only as far as needed to stay in gamut. Hard per-channel
+        // clipping would shift hue and lose highlight color detail.
+        var gamutScale = 1.0
+        for component in chroma {
+            if component > 0 { gamutScale = min(gamutScale, (1 - newLuminance) / component) }
+            if component < 0 { gamutScale = min(gamutScale, -newLuminance / component) }
+        }
+        // A darker luminance can itself raise HSV saturation even without a
+        // color boost. Bound that side effect too, especially on skin and reds.
+        let saturationCeiling = saturation + saturation * recipe.vibrance
+            * pow(1 - saturation, 2) * (skinLike ? 0.25 : 1)
+        let highChroma = chroma.max() ?? 0, lowChroma = chroma.min() ?? 0
+        let saturationDenominator = highChroma - lowChroma - saturationCeiling * highChroma
+        if saturationDenominator > 0 {
+            gamutScale = min(gamutScale, saturationCeiling * newLuminance / saturationDenominator)
+        }
+        chroma = chroma.map { (newLuminance + $0 * gamutScale).clamped(to: 0...1) }
+        return (chroma[0], chroma[1], chroma[2])
+    }
+
+    private func enhancementPixels(_ image: CGImage, maximumSide: Int) -> (luminances: [Double], saturations: [Double]) {
+        let scale = min(1.0, Double(maximumSide) / Double(max(image.width, image.height)))
+        let width = max(1, Int(Double(image.width) * scale)), height = max(1, Int(Double(image.height) * scale))
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let bitmap = CGContext(
+                data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            bitmap.interpolationQuality = .medium
+            bitmap.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return ([], []) }
+        var luminances: [Double] = [], saturations: [Double] = []
+        luminances.reserveCapacity(width * height)
+        saturations.reserveCapacity(width * height)
+        for offset in stride(from: 0, to: bytes.count, by: 4) {
+            let r = Double(bytes[offset]) / 255, g = Double(bytes[offset + 1]) / 255, b = Double(bytes[offset + 2]) / 255
+            let maximum = max(r, max(g, b)), minimum = min(r, min(g, b))
+            luminances.append(0.2126 * r + 0.7152 * g + 0.0722 * b)
+            saturations.append(maximum > 0 ? (maximum - minimum) / maximum : 0)
+        }
+        return (luminances, saturations)
     }
 
     private func exportSourceName(_ url: URL) -> String {

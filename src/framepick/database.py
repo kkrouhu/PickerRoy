@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections import defaultdict, deque
+from collections.abc import Iterator
 from pathlib import Path
 from threading import RLock
 
@@ -154,58 +156,126 @@ class FeedbackStore:
         ]
 
     def training_pairs(self, limit: int = 800) -> list[tuple[Candidate, Candidate]]:
-        """Combine explicit A/B choices with the user's latest keep/favorite/reject decisions."""
-        pairs: list[tuple[Candidate, Candidate]] = []
-        seen: set[tuple[str, str]] = set()
-        for winner, loser in self.preference_pairs():
-            key = (winner.id, loser.id)
-            if key not in seen:
-                seen.add(key)
-                pairs.append((winner, loser))
+        """Build a bounded, recent-first sample without discarding stored history.
+
+        The latest choice wins within each feedback channel. Different videos
+        and A/B versus decision-derived signals take turns, so a large old video
+        cannot exhaust the budget before a new video's choices are considered.
+        CLEAR removes a candidate from inferred comparisons, not explicit A/B
+        history. Historical timestamps have second precision; conflicting A/B
+        and labels at the same recorded time favor the explicit comparison.
+        """
+        if limit <= 0:
+            return []
         with self._connect() as conn:
             feedback_rows = conn.execute(
-                """SELECT candidate.payload_json, feedback.decision
+                """SELECT candidate.id, feedback.decision, feedback.created_at, feedback.id
                 FROM feedback
                 JOIN candidates candidate ON candidate.id=feedback.candidate_id
                 JOIN (SELECT candidate_id, MAX(id) AS max_id FROM feedback GROUP BY candidate_id) latest
                   ON latest.max_id=feedback.id
-                WHERE feedback.decision != 'CLEAR'
-                ORDER BY feedback.id"""
+                ORDER BY feedback.id DESC"""
             ).fetchall()
-            candidate_rows = conn.execute("SELECT payload_json FROM candidates ORDER BY rowid").fetchall()
+            candidate_rows = conn.execute(
+                "SELECT payload_json, rowid FROM candidates ORDER BY rowid DESC"
+            ).fetchall()
+            preference_rows = conn.execute(
+                """SELECT candidate_a_id, candidate_b_id, winner_id, created_at, id
+                FROM preferences ORDER BY id DESC"""
+            ).fetchall()
 
-        decisions: dict[str, tuple[Candidate, str]] = {}
-        for payload, decision in feedback_rows:
+        candidates: dict[str, Candidate] = {}
+        by_video: dict[str, list[Candidate]] = defaultdict(list)
+        candidate_order: dict[str, int] = {}
+        for payload, rowid in candidate_rows:
             candidate = Candidate.from_dict(json.loads(payload))
-            decisions[candidate.id] = (candidate, decision)
-        all_candidates = [Candidate.from_dict(json.loads(row[0])) for row in candidate_rows]
+            candidates[candidate.id] = candidate
+            by_video[candidate.video_id].append(candidate)
+            candidate_order[candidate.video_id] = max(candidate_order.get(candidate.video_id, 0), rowid)
+        decisions = {identifier: (decision, timestamp, identifier_order)
+                     for identifier, decision, timestamp, identifier_order in feedback_rows}
+        decision_candidates: dict[str, list[Candidate]] = defaultdict(list)
+        activity: dict[str, tuple[str, int]] = {}
+        for identifier, decision, timestamp, identifier_order in feedback_rows:
+            candidate = candidates[identifier]
+            if decision != "CLEAR":
+                decision_candidates[candidate.video_id].append(candidate)
+            activity[candidate.video_id] = max(activity.get(candidate.video_id, ("", 0)),
+                                               (timestamp, identifier_order))
 
-        by_video: dict[str, list[Candidate]] = {}
-        for candidate in all_candidates:
-            by_video.setdefault(candidate.video_id, []).append(candidate)
-        def add(winner: Candidate, loser: Candidate) -> None:
-            key = (winner.id, loser.id)
-            if winner.id != loser.id and key not in seen and len(pairs) < limit:
-                seen.add(key)
-                pairs.append((winner, loser))
+        def key_for(a: Candidate, b: Candidate) -> tuple[str, str]:
+            return tuple(sorted((a.id, b.id)))
 
-        for video_candidates in by_video.values():
-            favorites = [item for item in video_candidates if decisions.get(item.id, (None, ""))[1] == "FAVORITE"]
-            kept = [item for item in video_candidates if decisions.get(item.id, (None, ""))[1] == "KEEP"]
-            rejected = [item for item in video_candidates if decisions.get(item.id, (None, ""))[1] == "REJECT"]
-            neutral = [item for item in video_candidates if item.id not in decisions and not item.rejected]
-            for winner in favorites:
-                for loser in (rejected + kept)[:40]:
-                    add(winner, loser)
-                for loser in [item for item in neutral if item.shot_id == winner.shot_id][:6]:
-                    add(winner, loser)
-            for winner in kept:
-                for loser in rejected[:40]:
-                    add(winner, loser)
-            for loser in rejected:
-                for winner in [item for item in neutral if item.shot_id == loser.shot_id][:6]:
-                    add(winner, loser)
-        return pairs[:limit]
+        explicit: dict[tuple[str, str], tuple[Candidate, Candidate, str]] = {}
+        explicit_by_video: dict[str, list[tuple[Candidate, Candidate]]] = defaultdict(list)
+        levels = {"FAVORITE": 2, "KEEP": 1, "REJECT": 0}
+        for a_id, b_id, winner_id, timestamp, identifier_order in preference_rows:
+            if a_id not in candidates or b_id not in candidates or winner_id not in {a_id, b_id} or a_id == b_id:
+                continue
+            a, b = candidates[a_id], candidates[b_id]
+            key = key_for(a, b)
+            if key in explicit or a.video_id != b.video_id or a.shot_id != b.shot_id:
+                continue
+            winner, loser = (a, b) if winner_id == a_id else (b, a)
+            # Prefer newer contradictory labels when their ordering is known.
+            # Equal timestamps cannot resolve cross-table order; explicit A/B
+            # is the stronger signal and must not be canceled by its reverse.
+            a_decision, a_time, _ = decisions.get(a_id, ("", "", 0))
+            b_decision, b_time, _ = decisions.get(b_id, ("", "", 0))
+            if (a_decision in levels and b_decision in levels
+                    and levels[a_decision] != levels[b_decision]
+                    and max(a_time, b_time) > timestamp):
+                winner, loser = (a, b) if levels[a_decision] > levels[b_decision] else (b, a)
+            explicit[key] = (winner, loser, timestamp)
+            explicit_by_video[a.video_id].append((winner, loser))
+            activity[a.video_id] = max(activity.get(a.video_id, ("", 0)), (timestamp, identifier_order))
+
+        def decision_pairs(video_id: str) -> Iterator[tuple[Candidate, Candidate]]:
+            marked = decision_candidates[video_id]
+            partners_by_level = {
+                level: [item for item in marked if levels[decisions[item.id][0]] != level][:40]
+                for level in levels.values()
+            }
+            neutral_by_shot: dict[str, list[Candidate]] = defaultdict(list)
+            for item in by_video[video_id]:
+                if item.id not in decisions and not item.rejected and len(neutral_by_shot[item.shot_id]) < 6:
+                    neutral_by_shot[item.shot_id].append(item)
+            for anchor in marked:
+                level = levels[decisions[anchor.id][0]]
+                for partner in partners_by_level[level]:
+                    yield (anchor, partner) if level > levels[decisions[partner.id][0]] else (partner, anchor)
+                if level != 1:
+                    for item in neutral_by_shot[anchor.shot_id]:
+                        yield (anchor, item) if level == 2 else (item, anchor)
+
+        def take_turns(iterables) -> Iterator[tuple[Candidate, Candidate]]:
+            active = deque(iter(iterable) for iterable in iterables)
+            while active:
+                current = active.popleft()
+                try:
+                    pair = next(current)
+                except StopIteration:
+                    continue
+                active.append(current)
+                yield pair
+
+        # Recent video activity first; source-local IDs and candidate insertion
+        # order make ties deterministic without altering the historical schema.
+        video_ids = sorted(activity, key=lambda video_id: (*activity[video_id], candidate_order[video_id]), reverse=True)
+        streams = [take_turns((explicit_by_video[video_id], decision_pairs(video_id))) for video_id in video_ids]
+        pairs: list[tuple[Candidate, Candidate]] = []
+        seen: set[tuple[str, str]] = set()
+        for winner, loser in take_turns(streams):
+            key = key_for(winner, loser)
+            if key in seen:
+                continue
+            seen.add(key)
+            if key in explicit:
+                winner, loser, _ = explicit[key]
+            pairs.append((winner, loser))
+            if len(pairs) >= limit:
+                break
+        return pairs
 
     def personalization_stats(self) -> dict[str, object]:
         latest = self.latest_feedback()

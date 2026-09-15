@@ -8,6 +8,13 @@ struct ContentView: View {
     @State private var optimizedExport = false
     @State private var selectedCategory: VisualCategory?
     @State private var confirmingPreferenceReset = false
+    @AppStorage(MaterialUsageNotice.versionKey) private var acceptedNoticeVersion = ""
+    @AppStorage(MaterialUsageNotice.timestampKey) private var acceptedNoticeTimestamp = 0.0
+    @State private var noticeFlow = MaterialUsageNotice.ImportFlow()
+
+    private var hasAcknowledgedNotice: Bool {
+        MaterialUsageNotice.isAcknowledged(version: acceptedNoticeVersion, timestamp: acceptedNoticeTimestamp)
+    }
 
     private var displayedCandidates: [FrameCandidate] {
         guard let selectedCategory else { return model.candidates }
@@ -30,6 +37,21 @@ struct ContentView: View {
                 exportBar
             }
             .background(Color.platformBackground)
+        }
+        .sheet(item: $noticeFlow.presentation, onDismiss: {
+            // Present the file picker only after the notice sheet has left the
+            // screen. Cancel/swipe-to-dismiss never queues an import panel.
+            if noticeFlow.didDismiss(acknowledged: hasAcknowledgedNotice) {
+                openVideoImporter()
+            }
+        }) { presentation in
+            MaterialUsageNoticeSheet(presentation: presentation, onCancel: {
+                noticeFlow.cancel()
+            }, onAcknowledge: { hasRead in
+                guard noticeFlow.acknowledge(hasRead: hasRead) else { return }
+                acceptedNoticeVersion = MaterialUsageNotice.version
+                acceptedNoticeTimestamp = Date().timeIntervalSince1970
+            })
         }
         .fileImporter(
             isPresented: $showingVideoImporter,
@@ -120,6 +142,12 @@ struct ContentView: View {
                     Button("取消", role: .destructive) { model.cancelAnalysis() }
                 }
             }
+
+            Button("素材与使用须知") { noticeFlow.showReadOnly() }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityHint("查看素材权利、使用责任和本地处理说明")
         }
         .padding()
     }
@@ -224,25 +252,23 @@ struct ContentView: View {
                 model.exportToPhotoLibrary(optimized: false)
             }
             .disabled(model.selectedCandidates.isEmpty || model.isBusy)
-            Button("优化后存入相册") {
+            Button("增强画质") {
                 model.exportToPhotoLibrary(optimized: true)
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.selectedCandidates.isEmpty || model.isBusy)
-            .help("温和提升尺寸、色彩和锐度；不会凭空恢复原视频中不存在的真实细节")
             #else
             Button("直接导出") {
                 optimizedExport = false
                 chooseExportFolder()
             }
             .disabled(model.selectedCandidates.isEmpty || model.isBusy)
-            Button("优化后导出") {
+            Button("增强画质") {
                 optimizedExport = true
                 chooseExportFolder()
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.selectedCandidates.isEmpty || model.isBusy)
-            .help("温和提升尺寸、色彩和锐度；不会凭空恢复原视频中不存在的真实细节")
             #endif
         }
         .padding()
@@ -250,6 +276,12 @@ struct ContentView: View {
     }
 
     private func chooseVideos() {
+        guard noticeFlow.requestImport(acknowledged: hasAcknowledgedNotice) else { return }
+        openVideoImporter()
+    }
+
+    private func openVideoImporter() {
+        guard hasAcknowledgedNotice else { return }
         #if os(macOS)
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
@@ -280,6 +312,148 @@ struct ContentView: View {
         #else
         showingExportFolder = true
         #endif
+    }
+}
+
+// Versioned local acknowledgement, not a waiver of non-excludable duties or an
+// assertion that the user owns a particular video. No media/identity is stored.
+enum MaterialUsageNotice {
+    static let version = "2026-09-15.1"
+    static let versionKey = "materialUsageNotice.acceptedVersion"
+    static let timestampKey = "materialUsageNotice.acceptedAt"
+    static let paragraphs = [
+        "请仅使用你有权处理的素材，并自行确认截图及发布所需的版权、肖像和隐私授权。",
+        "违法或侵权使用，由使用者依法承担相应责任。PickerRoy 不授予任何素材使用权。",
+        "视频选帧、画面增强和偏好学习在本机完成。本须知不排除法律规定不得免除的责任。"
+    ]
+
+    static func isAcknowledged(version: String, timestamp: Double) -> Bool {
+        version == Self.version && timestamp.isFinite && timestamp > 0
+    }
+
+    enum Presentation: String, Identifiable {
+        case confirmImport, readOnly
+        var id: String { rawValue }
+    }
+
+    // Pure value state is shared with generated-state tests; tests do not write
+    // the real app's UserDefaults or simulate agreement for the actual user.
+    struct ImportFlow {
+        var presentation: Presentation?
+        private(set) var importPendingAfterDismissal = false
+
+        mutating func requestImport(acknowledged: Bool) -> Bool {
+            importPendingAfterDismissal = false
+            guard acknowledged else {
+                presentation = .confirmImport
+                return false
+            }
+            presentation = nil
+            return true
+        }
+
+        mutating func showReadOnly() {
+            importPendingAfterDismissal = false
+            presentation = .readOnly
+        }
+
+        mutating func acknowledge(hasRead: Bool) -> Bool {
+            guard presentation == .confirmImport, hasRead else { return false }
+            importPendingAfterDismissal = true
+            presentation = nil
+            return true
+        }
+
+        mutating func cancel() {
+            importPendingAfterDismissal = false
+            presentation = nil
+        }
+
+        mutating func didDismiss(acknowledged: Bool) -> Bool {
+            let shouldImport = importPendingAfterDismissal && acknowledged
+            importPendingAfterDismissal = false
+            return shouldImport
+        }
+    }
+}
+
+private struct MaterialUsageNoticeSheet: View {
+    let presentation: MaterialUsageNotice.Presentation
+    let onCancel: () -> Void
+    let onAcknowledge: (Bool) -> Void
+    @State private var hasRead = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("素材与使用须知")
+                .font(.title2.bold())
+                .accessibilityAddTraits(.isHeader)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(MaterialUsageNotice.paragraphs, id: \.self) { paragraph in
+                        Text(paragraph)
+                            .font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+
+            if presentation == .confirmImport {
+                Toggle("我已阅读并理解素材与使用须知", isOn: $hasRead)
+                    .toggleStyle(MaterialNoticeCheckboxStyle())
+                    .font(.subheadline)
+
+                HStack {
+                    Button("取消", role: .cancel, action: onCancel)
+                        .keyboardShortcut(.cancelAction)
+                    Spacer()
+                    Button("继续导入") { onAcknowledge(hasRead) }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!hasRead)
+                        .keyboardShortcut(.defaultAction)
+                }
+            } else {
+                HStack {
+                    Spacer()
+                    Button("关闭", action: onCancel)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.cancelAction)
+                }
+            }
+        }
+        .padding(28)
+        .onAppear { hasRead = false }
+        #if os(macOS)
+        .frame(width: 540, height: 470)
+        #else
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        #endif
+    }
+}
+
+private struct MaterialNoticeCheckboxStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(configuration.isOn ? Color.accentColor : Color.secondary)
+                    .accessibilityHidden(true)
+                configuration.label
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(configuration.isOn ? "已勾选" : "未勾选")
+        .accessibilityAddTraits(configuration.isOn ? .isSelected : [])
     }
 }
 

@@ -39,4 +39,6 @@ To reproduce a preview, use the `ictool` bundled **inside Icon Composer**, not t
 
 Other checked renditions: `Dark`, `TintedLight`, `TintedDark`, `ClearLight`, `ClearDark`. For actual-size inspection, export at width/height 64 rather than judging only the 1024px canvas. If the source foreground is regenerated, also update the copy in the `.icon` package and rerun native builds.
 
+The v0.3.5 Qt Mac package uses a **static compatibility ICNS** derived from the same Icon Composer `macOS / Default / 1024px` export. Generate that preview with `--platform macOS`, then run `scripts/create_macos_compat_icon.py <preview.png> work/compat.iconset assets/PickerRoy.icns`. It creates all standard 16–1024 pixel ICNS renditions with conservative Mac icon padding. This flattened compatibility image does not react to wallpaper or appearance; native `AppIcon.icon` remains the adaptive system asset. In-app Qt branding uses the outlined flat mark.
+
 Official references: [Icon Composer](https://developer.apple.com/icon-composer/), [SwiftUI Liquid Glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views).
