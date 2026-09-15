@@ -1,16 +1,30 @@
 # PickerRoy 中英双语使用说明书
 
-版本 / Version 0.3.2 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
+版本 / Version 0.3.3 · macOS 与 Windows / macOS and Windows · 2026 年 9 月 / September 2026
 
 ![PickerRoy Logo](素材/PickerRoy-logo.png)
 
-把一段视频，变成真正值得留下的照片。/ Turn a video into photographs genuinely worth keeping.
+从视频中精选好照片。/ Select great photos from video.
+
+上架顺序：先 Mac App Store，再 iPhone；本包为 GitHub 桌面测试版。/ Planned store rollout: Mac App Store first, then iPhone. This package is a GitHub desktop test release.
+
+另修复新 macOS 上 Apple Vision 参数桥接异常导致的分类降级，自检记录分析后真正使用的后端。/ Also fixes an Apple Vision options-bridging error on newer macOS; smoke tests record the backend actually used after analysis.
+
+快速筛选清晰、自然、适合使用的画面，保存到本地。/ Quickly shortlist clear, natural, useful frames and save them locally.
+
+本版更新白底 ROY 光圈标志、桌面品牌区、产品主标题、版本信息及三份说明书；保留原有筛选算法与本机学习能力，不宣称提升准确率或速度。/ This release updates the white ROY aperture identity, desktop branding, headline, version metadata, and all three manuals. Selection algorithms and local learning are unchanged; no increased accuracy or speed is claimed.
+
+升级前先导出并退出旧版，再替换应用；保留旧安装包和本机数据以便回退。/ Finish exporting and quit the old app before replacing it. Keep the previous installer and local data for rollback.
+
+这是未经过 Developer ID 公证的 GitHub 桌面测试包，不是 App Store 版本。不要关闭系统安全保护。/ This is a GitHub desktop test build without Developer ID notarization, not an App Store release. Do not disable system protections.
+
+视频处理无需网络；下载安装包、系统更新和云盘原件可能需要联网。/ Video processing needs no network; app downloads, system updates, and cloud-stored originals may require internet access.
 
 PickerRoy 是本地运行的视频静帧智能筛选工具。它结合技术质量、主题审美、离线热门视觉与每位用户的本机偏好，输出更少、更精、更不重复的候选照片。/ PickerRoy is a local-first intelligent still-frame selector. It combines technical quality, theme-aware aesthetics, an offline social-visual signal, and each user's local preferences to produce a smaller, sharper, less repetitive shortlist.
 
 普通用户下载 App 后即可使用，不需要 Codex、Python、单独安装 FFmpeg、账号、订阅或持续联网。/ The standalone App needs no Codex, Python, separate FFmpeg installation, account, subscription, or ongoing internet connection.
 
-Apple App Store V1.0 完全免费，所有当前核心功能开放，不包含订阅、App 内购买、付费墙、升级或恢复购买入口。两周观察期不会自动收费或锁定。iPhone/iPad 仅在保存结果时申请“添加照片”权限，不读取整个图库；核心处理无网络依赖，真机飞行模式仍是上架前必测项。/ Apple App Store V1.0 is completely free with all current core features available and no subscription, In-App Purchase, paywall, upgrade, or restore-purchase control. The two-week observation period never triggers automatic charging or locking. iPhone/iPad requests add-only Photos access only when saving results and does not read the full library. Core processing has no network dependency; a physical-device airplane-mode run remains a pre-release test.
+Apple App Store V1.0 计划免费提供当前核心功能，不包含订阅、App 内购买或付费墙。观察期不会自动收费或锁定。iPhone 仅在保存结果时申请“添加照片”权限，不读取整个图库；真机飞行模式仍是上架前必测项。目前不开发 iPad、Apple Watch 或 Vision Pro。/ The planned Apple App Store V1.0 release provides current core features for free, without subscriptions, In-App Purchase, or paywalls. The observation period never triggers automatic charges or locking. iPhone requests add-only Photos access when saving results, without reading the full library. A physical-device airplane-mode run remains a pre-release test. iPad, Apple Watch, and Vision Pro are not current targets.
 
 ## 1. 产品理念 / Product idea
 
@@ -27,9 +41,9 @@ PickerRoy 不把一种固定审美强加给所有人。收藏、保留、淘汰�
 | Apple 芯片 Mac / Apple Silicon Mac | `PickerRoy-macOS-Apple-Silicon.zip` |
 | Intel Mac | `PickerRoy-macOS-Intel.zip` |
 | Windows 10/11 x64 | `PickerRoy-Windows-x64.zip` |
-| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.2.zip` |
+| 可选 Codex 协助 / Optional Codex help | `PickerRoy-Codex-Skill-v0.3.3.zip` |
 
-macOS：解压，把 App 拖入“应用程序”。如首次被拦截，Control 点击 App，选择“打开”。不要全局关闭 Gatekeeper。/ macOS: unzip, move the App to Applications, and open it. If blocked on first launch, Control-click and choose Open. Do not disable Gatekeeper globally.
+macOS：解压，把 App 拖入“应用程序”。本包尚未公证；如无法验证开发者，先核验来源和校验和，确认可信后查看“系统设置 → 隐私与安全性”中本应用的“仍要打开”。如提示损坏或恶意软件，停止并反馈。不要关闭系统保护。/ macOS: unzip and move the app to Applications. This build is not notarized. If the developer cannot be verified, verify the source and checksum before reviewing the app-specific Open Anyway option in System Settings → Privacy & Security. Stop and report any damage or malware warning. Do not disable system protections.
 
 Windows：完整解压并保留整个文件夹，双击 `PickerRoy.exe`。如 SmartScreen 提示，先确认 GitHub Release 来源和 SHA-256。/ Windows: extract completely, keep the entire folder together, and open `PickerRoy.exe`. If SmartScreen appears, verify the GitHub Release source and SHA-256 first.
 

@@ -10,6 +10,7 @@ from .exporter import export_candidates
 from .logging_setup import configure_logging
 from .pipeline import VideoAnalyzer
 from .runtime import runtime_checks, runtime_ready
+from . import __version__
 
 
 def run_self_test(video: str | Path, output_dir: str | Path) -> Path:
@@ -22,13 +23,16 @@ def run_self_test(video: str | Path, output_dir: str | Path) -> Path:
         raise RuntimeError("视频运行环境未就绪")
     configure_logging(target)
     store = FeedbackStore(target / "pickerroy-self-test.sqlite3")
-    result = VideoAnalyzer(target, AnalysisConfig(max_results_per_video=12), store).analyze(source)
+    analyzer = VideoAnalyzer(target, AnalysisConfig(max_results_per_video=12), store)
+    result = analyzer.analyze(source)
     visible = [item for item in result.candidates if item.rank is not None and not item.rejected and not item.duplicate_of]
     exported = export_candidates(result.video, visible[:1], target / "exports", "PNG") if visible else []
     optimized = export_candidates(
         result.video, visible[:1], target / "exports-optimized", "JPEG", optimized=True
     ) if visible else []
     report = {
+        "version": __version__,
+        "classification_backend_after_analysis": getattr(analyzer.classifier, "active_name", analyzer.classifier.name),
         "success": bool(visible and exported and optimized),
         "video": source.name,
         "shots": len(result.shots),

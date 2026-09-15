@@ -29,7 +29,7 @@ Highlights:
 - Optional enhanced export for gentle resizing, color, and sharpness improvements
 - On-device personalization
 - No account, ads, tracking, or video uploads
-- Native iPhone, iPad, and Mac experience
+- Native Mac experience first, with iPhone to follow (adjust to the platform being submitted)
 
 Enhanced export cannot recreate real detail that is absent from the source video. Results still depend on source resolution, compression, and crop.
 

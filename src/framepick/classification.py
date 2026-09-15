@@ -27,10 +27,11 @@ class AppleVisionClassifier:
     name = "apple-vision"
 
     def __init__(self) -> None:
-        from Foundation import NSURL  # type: ignore
+        from Foundation import NSDictionary, NSURL  # type: ignore
         from Vision import VNClassifyImageRequest, VNDetectFaceRectanglesRequest, VNImageRequestHandler  # type: ignore
 
         self.NSURL = NSURL
+        self.NSDictionary = NSDictionary
         self.VNClassifyImageRequest = VNClassifyImageRequest
         self.VNDetectFaceRectanglesRequest = VNDetectFaceRectanglesRequest
         self.VNImageRequestHandler = VNImageRequestHandler
@@ -39,7 +40,9 @@ class AppleVisionClassifier:
         url = self.NSURL.fileURLWithPath_(str(Path(path).resolve()))
         request = self.VNClassifyImageRequest.alloc().init()
         face_request = self.VNDetectFaceRectanglesRequest.alloc().init()
-        handler = self.VNImageRequestHandler.alloc().initWithURL_options_(url, {})
+        # A real NSDictionary returns nil for absent option keys. On newer macOS,
+        # bridging a Python dict can instead throw "key does not exist" in Vision.
+        handler = self.VNImageRequestHandler.alloc().initWithURL_options_(url, self.NSDictionary.dictionary())
         result = handler.performRequests_error_([request, face_request], None)
         success = result[0] if isinstance(result, tuple) else result
         if not success:

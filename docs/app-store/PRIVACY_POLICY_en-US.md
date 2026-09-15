@@ -10,7 +10,7 @@ PickerRoy does not collect, upload, sell, or share your videos, exported images,
 
 ## On-device processing
 
-Videos you explicitly select are processed on the device using Apple system media and vision frameworks. Candidate frames and exported images are written only to locations you choose. On iPhone and iPad, PickerRoy requests add-only Photos access only when you save selected images; it does not read your full photo library. Your personalization profile is stored in the app's local data directory on the current device and is not transmitted to PickerRoy or any third party.
+Videos you explicitly select are processed on the device using Apple system media and vision frameworks. Candidate frames and exported images are written only to locations you choose. On iPhone, PickerRoy requests add-only Photos access only when you save selected images; it does not read your full photo library. Your personalization profile is stored in the app's local data directory on the current device and is not transmitted to PickerRoy or any third party.
 
 ## Network access
 

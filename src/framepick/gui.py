@@ -40,6 +40,7 @@ from .exporter import export_candidates
 from .models import AnalysisResult, Candidate
 from .pipeline import VideoAnalyzer, discover_videos
 from .runtime import runtime_checks, runtime_ready
+from .resources import resource_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,7 +60,8 @@ APP_STYLE = """
 QWidget { background: #F4F4F1; color: #20211F; font-family: 'PingFang SC', 'Helvetica Neue', sans-serif; font-size: 14px; }
 QMainWindow { background: #F4F4F1; }
 #sidebar { background: #171916; border: none; }
-#brand { color: #F7F8F4; background: transparent; font-size: 22px; font-weight: 700; padding: 10px 12px 20px 12px; }
+#brand { color: #F7F8F4; background: transparent; font-size: 21px; font-weight: 700; padding: 0; }
+#brandRow { background: transparent; }
 #sideButton { color: #C9CBC5; background: transparent; text-align: left; padding: 13px 15px; border-radius: 9px; font-weight: 600; }
 #sideButton:checked, #sideButton:hover { color: white; background: #30332D; }
 #title { font-size: 28px; font-weight: 720; color: #171916; }
@@ -333,9 +335,26 @@ class MainWindow(QMainWindow):
         sidebar.setFixedWidth(210)
         side_layout = QVBoxLayout(sidebar)
         side_layout.setContentsMargins(14, 22, 14, 18)
+        brand_row = QFrame()
+        brand_row.setObjectName("brandRow")
+        brand_layout = QHBoxLayout(brand_row)
+        brand_layout.setContentsMargins(0, 4, 0, 20)
+        brand_layout.setSpacing(10)
+        mark = QLabel()
+        mark.setFixedSize(42, 42)
+        mark.setStyleSheet("background: transparent;")
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark_image = QPixmap(str(resource_path("assets/PickerRoy-logo.png"))).scaled(
+            84, 84, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
+        mark_image.setDevicePixelRatio(2)
+        mark.setPixmap(mark_image)
+        brand_layout.addWidget(mark)
         brand = QLabel("PickerRoy")
         brand.setObjectName("brand")
-        side_layout.addWidget(brand)
+        brand_layout.addWidget(brand)
+        brand_layout.addStretch()
+        side_layout.addWidget(brand_row)
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         nav_items = [("导入", 0), ("筛选结果", 1), ("偏好训练", 2), ("设置", 3)]
@@ -378,7 +397,7 @@ class MainWindow(QMainWindow):
         return page, layout
 
     def _import_page(self) -> QWidget:
-        page, layout = self._page_shell("导入视频", "PickerRoy 会先识别镜头，再让同一镜头里的多个画面竞争，找出最值得保存的瞬间。")
+        page, layout = self._page_shell("从视频中精选好照片", "快速筛选清晰、自然、适合使用的画面，保存到本地。视频与偏好数据在本机处理，无需上传。")
         self.drop_area = DropArea()
         self.drop_area.paths_dropped.connect(self.add_inputs)
         layout.addWidget(self.drop_area)

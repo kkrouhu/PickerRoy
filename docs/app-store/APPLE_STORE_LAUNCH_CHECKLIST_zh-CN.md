@@ -1,21 +1,21 @@
 # PickerRoy Apple Store 上架总清单
 
-更新日期：2026-09-14
+更新日期：2026-09-15
 
 ## 最终目标
 
-PickerRoy 同时在 iPhone/iPad App Store 与 Mac App Store 提供下载。视频、图片、审美偏好和导出均在用户设备本地处理；没有账号、服务器、广告或行为追踪。
+先完成免费本地试用，再先上 Mac App Store（Apple 芯片优先），随后上 iPhone App Store；暂不考虑 iPad、Apple Watch 或 Vision Pro。GitHub 桌面包保留 Apple Silicon、Intel Mac 与 Windows x64。视频、图片、审美偏好和导出均在用户设备本地处理；没有账号、服务器、广告或行为追踪。
 
 ## 必须费用
 
 | 项目 | 金额 | 是否分别收费 |
 |---|---:|---|
-| Apple Developer Program | 中国大陆当前为每年 ¥688；其他地区通常为每年 99 美元或等值本地货币 | 一份会员同时覆盖 iPhone、iPad、Mac |
+| Apple Developer Program | 通常每年 99 美元或本地等值金额，以 Apple 结账页面为准 | 一份会员可用于 Mac 与 iPhone 分发 |
 | Xcode、App Store Connect、TestFlight | ¥0 | 已包含 |
 | 隐私政策与支持页面 | ¥0 | 使用 GitHub Pages，无需购买域名 |
-| PickerRoy V1.0 | 免费下载，所有当前核心功能免费 | iPhone/iPad + Mac 同一 App 记录 |
+| PickerRoy V1.0 | 计划免费提供当前核心功能 | 先 Mac，后 iPhone |
 
-第一年的固定上架成本：**¥688**。会员资格默认按年自动续订，价格以购买页面为准。V1.0 免费，因此首发不需要配置消费者付款产品。
+当前免费试用不需要先购买会员。通过 Developer App 购买的会员通常按年自动续订，准备上架时再核对当地价格和续订条款，由账户持有人付款。V1.0 计划免费，因此首发不需要配置消费者付款产品。
 
 V1.0 不启用付费下载、IAP 或订阅。收款银行、付费税务和 Small Business Program 可以推迟到未来明确启用商业化时处理；开发者会员身份和 App Store Connect 协议仍需按 Apple 页面要求完成。
 
@@ -50,7 +50,7 @@ V1.0 不启用付费下载、IAP 或订阅。收款银行、付费税务和 Smal
 3. 确认最终 Bundle ID。项目当前临时值是 `com.roy.pickerroy`，正式上传前应改成你控制且未被占用的标识。
 4. 在 App Store Connect 只新建一条 PickerRoy App 记录，同时添加 iOS 与 macOS，两个平台使用相同 Bundle ID，形成通用购买。
 5. 将 V1.0 定价设为免费，不创建任何 IAP、订阅或付费墙。
-6. 收款银行、付费税务与未来 18/月、128/年、258/终身的商业化配置暂不启用。
+6. 收款银行、付费税务与未来商业化配置暂不启用；价格草案不代表最终批准价格。
 7. 配置版本号、年龄分级、分类和全球可用地区。
 8. 上传构建，先通过 TestFlight/本机测试。
 9. 填写“App 不收集数据”、出口合规、内容版权、审核联系人和审核说明。

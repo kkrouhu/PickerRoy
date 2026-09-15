@@ -8,11 +8,13 @@ from PySide6.QtWidgets import QApplication
 from .gui import APP_STYLE, MainWindow, data_directory
 from .logging_setup import configure_logging
 from .resources import resource_path
+from . import __version__
 
 
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("PickerRoy")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("PickerRoy")
     icon_path = resource_path("assets/PickerRoy-logo.png")
     if icon_path.exists():

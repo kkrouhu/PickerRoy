@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import os
 import platform
+import plistlib
+import runpy
 import shutil
+import subprocess
 from pathlib import Path
 
 import PyInstaller.__main__
@@ -70,6 +73,19 @@ def main() -> int:
         version_file = ROOT / "packaging" / "windows-version.txt"
         options.append(f"--version-file={version_file}")
     PyInstaller.__main__.run(options)
+    if system == "Darwin":
+        # PyInstaller's default bundle version is unrelated to the Python project version.
+        app = Path(args.dist).resolve() / "PickerRoy.app"
+        info_path = app / "Contents" / "Info.plist"
+        with info_path.open("rb") as stream:
+            info = plistlib.load(stream)
+        version = runpy.run_path(str(ROOT / "src" / "framepick" / "__init__.py"))["__version__"]
+        info["CFBundleShortVersionString"] = version
+        info["CFBundleVersion"] = version
+        with info_path.open("wb") as stream:
+            plistlib.dump(info, stream)
+        # Local ad-hoc signature, not Developer ID signing or Apple notarization.
+        subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
     return 0
 
 

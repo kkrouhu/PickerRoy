@@ -15,7 +15,7 @@
 
 当前自动发布包没有使用 Roy 自己的 Apple Developer ID 或 Windows 代码签名证书，因此系统可能在首次启动时显示安全确认。
 
-- macOS：解压后把 `PickerRoy.app` 拖到“应用程序”。如果双击被拦截，按住 Control 点按应用，选择“打开”，再次确认“打开”。不要全局关闭 Gatekeeper。
+- macOS：解压后把 `PickerRoy.app` 拖到“应用程序”。本包未使用 Developer ID 公证；如果提示无法验证开发者，先核对来源和校验和，确认可信后查看“系统设置 → 隐私与安全性”中本应用的“仍要打开”。如果提示损坏或恶意软件，停止并反馈原始警告，不要全局关闭 Gatekeeper 或运行解除隔离命令。参见 [Apple 官方说明](https://support.apple.com/en-us/102445)。
 - Windows：完整解压 ZIP，保留整个 `PickerRoy` 文件夹，再双击文件夹内的 `PickerRoy.exe`。如 SmartScreen 提示，请先核对下载来源和 SHA-256。
 
 要实现完全无提示的商业级安装，后续需要 Apple Developer ID 签名与公证，以及 Windows 代码签名证书；构建流程已经为后续接入留出位置。

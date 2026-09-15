@@ -72,7 +72,7 @@ struct ContentView: View {
                 LogoMark(size: 42)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("PickerRoy").font(.title2.bold())
-                    Text("从视频发现好照片").font(.caption).foregroundStyle(.secondary)
+                    Text("从视频中精选好照片").font(.caption).foregroundStyle(.secondary)
                 }
             }
             .padding(.top, 8)
@@ -187,9 +187,9 @@ struct ContentView: View {
         VStack(spacing: 16) {
             Spacer()
             LogoMark(size: 86)
-            Text(model.videos.isEmpty ? "导入一条视频，开始发现好照片" : "准备就绪，选择比例后开始分析")
+            Text(model.videos.isEmpty ? "从视频中精选好照片" : "准备就绪，选择比例后开始分析")
                 .font(.title3.bold())
-            Text("人物表情、风景构图、清晰度与色彩全部在本机分析，无需上传。")
+            Text("快速筛选清晰、自然、适合使用的画面，保存到本地。视频在你的设备上处理。")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button("选择视频") { chooseVideos() }
@@ -379,25 +379,11 @@ private struct Thumbnail: View {
 private struct LogoMark: View {
     let size: CGFloat
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.22).fill(Color.white)
-            RoundedRectangle(cornerRadius: size * 0.22).stroke(Color.black.opacity(0.14), lineWidth: 1)
-            HStack(spacing: 0) {
-                Text("R").font(.system(size: size * 0.35, weight: .black, design: .rounded))
-                ZStack {
-                    Circle().stroke(Color.black, lineWidth: max(2, size * 0.055))
-                    ForEach(0..<6, id: \.self) { index in
-                        Capsule().fill(Color.black)
-                            .frame(width: size * 0.045, height: size * 0.19)
-                            .offset(y: -size * 0.09)
-                            .rotationEffect(.degrees(Double(index) * 60))
-                    }
-                    Circle().fill(Color.white).frame(width: size * 0.10)
-                }.frame(width: size * 0.34, height: size * 0.34)
-                Text("Y").font(.system(size: size * 0.35, weight: .black, design: .rounded))
-            }.foregroundStyle(.black)
-        }
-        .frame(width: size, height: size)
+        Image("BrandMark")
+            .resizable().scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.235, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
 

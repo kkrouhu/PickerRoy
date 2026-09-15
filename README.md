@@ -1,5 +1,17 @@
 # PickerRoy
 
+## v0.3.3 · 从视频中精选好照片 / Select great photos from video
+
+快速筛选清晰、自然、适合使用的画面，保存到本地。视频与偏好数据在你的设备上处理。/ Quickly shortlist clear, natural, useful frames and save them locally. Video processing and preferences stay on your device.
+
+本版更新了白底 ROY 光圈标志、产品文案、应用版本信息与三份使用说明书，保留现有筛选与偏好学习能力；没有宣称新的准确率提升。/ This release refreshes the white ROY aperture identity, product messaging, application version metadata, and all three manuals. Existing selection and preference-learning features are preserved; no new accuracy improvement is claimed.
+
+[中英双语更新说明 / Bilingual release notes](docs/RELEASE_NOTES_v0.3.3.md) · [版本下载 / Downloads](https://github.com/kkrouhu/PickerRoy/releases/tag/v0.3.3) · [中英双语说明书 / Bilingual manual](docs/manual/PickerRoy中英双语使用说明书.pdf)
+
+同时修复了新 macOS 下 Apple Vision 参数桥接异常导致的识别降级，并让自检记录真实分类后端。/ Also fixes an Apple Vision options-bridging error on newer macOS and records the actual classification backend in smoke-test reports.
+
+![PickerRoy v0.3.3 桌面界面 / Desktop interface](docs/GUI_IMPORT_v0.3.3.png)
+
 PickerRoy 是一款完全在本机运行的视频静帧智能筛选工具，面向摄影师和内容创作者。它不会简单地每隔几秒截图，而是先识别镜头，再结合技术质量、内容类型、社交媒体热门视觉模型和你的本机偏好，挑选清晰、有代表性且彼此不同的瞬间。
 
 App Store V1.0 采用完全免费策略：所有当前核心功能直接可用，不含订阅、App 内购买、付费墙或购买入口。未来商业化计划与早期用户政策均未启用，详见[产品原则](docs/PRODUCT_PRINCIPLES.md)与[商业化计划](docs/MONETIZATION_PLAN.md)。
@@ -13,6 +25,8 @@ App Store V1.0 采用完全免费策略：所有当前核心功能直接可用�
 Codex Skill 是另外一个可选下载，只用于让 Codex 更了解 PickerRoy 的安装、使用、测试与排错方式。它不是桌面应用，单独下载 Skill 不能代替 PickerRoy。
 
 首次启动和系统安全提示见[下载、安装与发布说明](docs/DISTRIBUTION.md)。
+
+首次试用、iPhone 免费个人签名，以及何时需要付费会员，见[一步一步免费试用指引 / Free trial guide](docs/FREE_TRIAL_GUIDE_zh-EN.md)。先 Mac App Store（Apple 芯片优先），再 iPhone；当前不开发 iPad、Watch 或 Vision Pro。
 
 完整资料提供[中文 PDF](docs/manual/PickerRoy中文使用说明书.pdf)、[English PDF](docs/manual/PickerRoy-English-User-Manual.pdf)和[中英双语 PDF](docs/manual/PickerRoy中英双语使用说明书.pdf)，同时保留可在线阅读的 Markdown 版本。
 
